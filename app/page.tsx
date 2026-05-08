@@ -278,28 +278,44 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
   );
 }
 
-// ── Filter pills ──────────────────────────────────────────────────────────────
-function FilterRow({ label, options, value, onChange }: {
+// ── Filter dropdown ───────────────────────────────────────────────────────────
+function FilterSelect({ label, options, value, onChange }: {
   label: string; options: string[]; value: string; onChange: (v: string) => void;
 }) {
+  const active = value !== 'All';
   return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-      <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginRight: 4, whiteSpace: 'nowrap' }}>{label}:</span>
-      {options.map(opt => {
-        const active = value === opt;
-        return (
-          <button key={opt} onClick={() => onChange(opt)} style={{
-            padding: '5px 12px', borderRadius: 6,
-            border: `1.5px solid ${active ? '#067A46' : '#E4E4E4'}`,
-            background: active ? '#F6FDE9' : '#fff',
-            color: active ? '#067A46' : '#4B4B4B',
-            font: '600 12px/16px var(--font-body)',
-            cursor: 'pointer', transition: 'all 150ms',
-          }}>
-            {opt}
-          </button>
-        );
-      })}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+      <label style={{ font: '500 11px/14px var(--font-body)', color: '#676767', letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        {label}
+      </label>
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        style={{
+          padding: '7px 28px 7px 10px',
+          borderRadius: 7,
+          border: `1.5px solid ${active ? '#067A46' : '#E4E4E4'}`,
+          background: active ? '#F6FDE9' : '#fff',
+          color: active ? '#067A46' : '#242424',
+          font: `${active ? 600 : 400} 13px/18px var(--font-body)`,
+          cursor: 'pointer',
+          outline: 'none',
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23676767' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 9px center',
+          minWidth: 110,
+          maxWidth: 200,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt === 'All' ? `All ${label}s` : opt}</option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -379,74 +395,68 @@ export default function SpendDashboard() {
 
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* ── Filter Strip ───────────────────────────────────────────────── */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
+        {/* ── Filter Toolbar ─────────────────────────────────────────────── */}
+        <div style={{
+          background: '#fff', borderRadius: 10, padding: '14px 20px',
+          border: '1px solid #E4E4E4',
+          display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
+        }}>
           {/* Search */}
-          <div style={{ position: 'relative' }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
-              style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-              <circle cx="6.5" cy="6.5" r="4" stroke="#9CA3AF" strokeWidth="1.5"/>
-              <path d="M10 10l3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search supplier, SKU, ingredient, week, risk…"
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                padding: '8px 36px 8px 36px',
-                borderRadius: 8, border: `1.5px solid ${search ? '#067A46' : '#E4E4E4'}`,
-                font: '400 14px/20px var(--font-body)', color: '#242424',
-                outline: 'none', background: '#fff',
-                transition: 'border-color 150ms',
-              }}
-            />
-            {search && (
-              <button onClick={() => setSearch('')} style={{
-                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                color: '#9CA3AF', font: '400 16px/1 var(--font-body)', lineHeight: 1,
-              }}>✕</button>
-            )}
+          <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <label style={{ font: '500 11px/14px var(--font-body)', color: '#676767', letterSpacing: '.03em', textTransform: 'uppercase' }}>
+              Search
+            </label>
+            <div style={{ position: 'relative' }}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                <circle cx="6.5" cy="6.5" r="4" stroke="#9CA3AF" strokeWidth="1.5"/>
+                <path d="M10 10l3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Supplier, SKU, ingredient, week…"
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  padding: '7px 30px 7px 30px',
+                  borderRadius: 7, border: `1.5px solid ${search ? '#067A46' : '#E4E4E4'}`,
+                  font: '400 13px/18px var(--font-body)', color: '#242424',
+                  outline: 'none', background: '#fff',
+                }}
+              />
+              {search && (
+                <button onClick={() => setSearch('')} style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                  color: '#9CA3AF', fontSize: 14, lineHeight: 1,
+                }}>✕</button>
+              )}
+            </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #F0F0F0', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <FilterRow
-            label="Category"
-            options={['All', ...CATEGORIES]}
-            value={filterCategory}
-            onChange={v => setFilterCategory(v)}
-          />
-          <FilterRow
-            label="Market"
-            options={['All', ...MARKETS]}
-            value={filterMarket}
-            onChange={v => setFilterMarket(v)}
-          />
-          <FilterRow
-            label="Status"
-            options={['All', 'Historical', 'Forecast']}
-            value={filterStatus}
-            onChange={v => setFilterStatus(v as 'All' | 'Historical' | 'Forecast')}
-          />
-          <FilterRow
-            label="Cat. Manager"
-            options={['All', ...CATEGORY_MANAGERS]}
-            value={filterCategoryManager}
-            onChange={v => setFilterCategoryManager(v)}
-          />
+          {/* Dropdowns */}
+          <FilterSelect label="Category"     options={['All', ...CATEGORIES]}        value={filterCategory}        onChange={setFilterCategory} />
+          <FilterSelect label="Market"       options={['All', ...MARKETS]}           value={filterMarket}          onChange={setFilterMarket} />
+          <FilterSelect label="Status"       options={['All', 'Historical', 'Forecast']} value={filterStatus}     onChange={v => setFilterStatus(v as 'All' | 'Historical' | 'Forecast')} />
+          <FilterSelect label="Cat. Manager" options={['All', ...CATEGORY_MANAGERS]} value={filterCategoryManager} onChange={setFilterCategoryManager} />
+
+          {/* Clear */}
           {hasFilters && (
-            <div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <label style={{ font: '500 11px/14px var(--font-body)', color: 'transparent', letterSpacing: '.03em' }}>x</label>
               <button
                 onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); }}
-                style={{ padding: '5px 12px', borderRadius: 6, border: '1.5px solid #E4E4E4', background: 'transparent', color: '#676767', font: '400 12px/16px var(--font-body)', cursor: 'pointer' }}>
-                Clear all filters
+                style={{
+                  padding: '7px 14px', borderRadius: 7,
+                  border: '1.5px solid #E4E4E4', background: '#fff',
+                  color: '#676767', font: '400 13px/18px var(--font-body)',
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                }}>
+                ✕ Clear
               </button>
             </div>
           )}
-          </div>
         </div>
 
         {/* ── KPI Strip ─────────────────────────────────────────────────── */}
