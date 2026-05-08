@@ -16,8 +16,11 @@ const GROUPS: NavGroup[] = [
   },
   {
     id: 'category', label: 'Category Management', items: [
-      { id: 'catoverview', label: 'Overview',   path: '/category',      icon: '◉' },
-      { id: 'catdach',     label: 'DACH',       path: '/category/dach', icon: '🇩🇪' },
+      { id: 'catoverview', label: 'Overview',   path: '/category',         icon: '◉' },
+      { id: 'catdach',     label: 'DACH',       path: '/category/dach',    icon: '🇩🇪' },
+      { id: 'catus',       label: 'US',         path: '/category/us',      icon: '🇺🇸' },
+      { id: 'catdkse',     label: 'DKSE',       path: '/category/dkse',    icon: '🇩🇰' },
+      { id: 'catbenelux',  label: 'BENELUX',    path: '/category/benelux', icon: '🇧🇪' },
     ],
   },
   {

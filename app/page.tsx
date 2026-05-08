@@ -4,29 +4,41 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell,
 } from "recharts";
-import { ROWS, METRICS, SUPPLIER_SPLIT, WEEKLY_CHART, type SpendRow } from "@/lib/data";
+import {
+  ROWS, CATEGORIES, MARKETS,
+  computeMetrics, computeSupplierSplit, computeWeeklyChart,
+  supplierKey, SUPPLIER_COLOR,
+  type SpendRow,
+} from "@/lib/data";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt = (n: number) =>
-  n >= 1000 ? `€${(n / 1000).toFixed(1)}k` : `€${n.toLocaleString()}`;
-
+const fmt     = (n: number) => n >= 1000 ? `€${(n / 1000).toFixed(1)}k` : `€${n.toLocaleString()}`;
 const fmtFull = (n: number) => `€${n.toLocaleString('de-DE')}`;
 
-const SUPPLIER_COLORS: Record<string, string> = {
-  'AmoreFood GmbH BAK': '#067A46',
-  'Lika Bakery BV':     '#1268FF',
+const CATEGORY_CHIP: Record<string, { bg: string; color: string }> = {
+  Bakery:  { bg: '#FEF3C7', color: '#92400E' },
+  Grocery: { bg: '#EFF6FF', color: '#1E40AF' },
+  Protein: { bg: '#F0FDF4', color: '#166534' },
+};
+
+const MARKET_CHIP: Record<string, { bg: string; color: string }> = {
+  DACH:    { bg: '#F5F5F5', color: '#374151' },
+  US:      { bg: '#EFF6FF', color: '#1E40AF' },
+  DKSE:    { bg: '#FDF4FF', color: '#7E22CE' },
+  BENELUX: { bg: '#FFF7ED', color: '#9A3412' },
 };
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 function KpiCard({ label, value, sub, tone }: {
   label: string; value: string; sub?: string;
-  tone?: 'positive' | 'warning' | 'neutral';
+  tone?: 'positive' | 'warning' | 'danger' | 'neutral';
 }) {
-  const subColor = tone === 'positive' ? '#067A46' : tone === 'warning' ? '#A43700' : '#676767';
+  const subColor = tone === 'positive' ? '#067A46' : tone === 'warning' ? '#A43700' : tone === 'danger' ? '#B30000' : '#676767';
   return (
     <div style={{
       flex: 1, minWidth: 140, background: '#fff', borderRadius: 10, padding: '18px 20px',
-      border: '1px solid #E4E4E4', boxShadow: '0 1px 3px rgba(36,36,36,.06)',
+      border: `1px solid ${tone === 'danger' ? '#FCA5A5' : tone === 'warning' ? '#FCD34D' : '#E4E4E4'}`,
+      boxShadow: '0 1px 3px rgba(36,36,36,.06)',
     }}>
       <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>
         {label}
@@ -41,22 +53,26 @@ function KpiCard({ label, value, sub, tone }: {
 function SupplierBar({ supplier, actual, awarded, pct, color }: {
   supplier: string; actual: number; awarded: number; pct: number; color: string;
 }) {
-  const shortName = supplier === 'AmoreFood GmbH BAK' ? 'AmoreFood' : 'Lika Bakery';
+  const utilPct = awarded > 0 ? Math.round(actual / awarded * 100) : 0;
+  const isAtRisk = utilPct >= 80;
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
-          <span style={{ font: '600 14px/20px var(--font-body)', color: '#242424' }}>{shortName}</span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, display: 'inline-block' }} />
+          <span style={{ font: '600 13px/18px var(--font-body)', color: '#242424' }}>{supplier}</span>
         </div>
-        <span style={{ font: '700 14px/20px var(--font-body)', color: '#242424' }}>{fmtFull(actual)}</span>
+        <span style={{ font: '700 13px/18px var(--font-body)', color: isAtRisk ? '#B30000' : '#242424' }}>
+          {utilPct}%
+          {isAtRisk && <span style={{ marginLeft: 4, fontSize: 11 }}>⚠</span>}
+        </span>
       </div>
-      <div style={{ height: 10, background: '#EEE', borderRadius: 6, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 6, transition: 'width 600ms cubic-bezier(0,0,0.2,1)' }} />
+      <div style={{ height: 8, background: '#EEE', borderRadius: 6, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: isAtRisk ? '#DC2626' : color, borderRadius: 6, transition: 'width 600ms cubic-bezier(0,0,0.2,1)' }} />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-        <span style={{ font: '400 11px/14px var(--font-body)', color: '#676767' }}>{pct}% of actual spend</span>
-        <span style={{ font: '400 11px/14px var(--font-body)', color: '#676767' }}>Budget: {fmtFull(awarded)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+        <span style={{ font: '400 11px/14px var(--font-body)', color: '#676767' }}>{fmtFull(actual)} actual</span>
+        <span style={{ font: '400 11px/14px var(--font-body)', color: '#676767' }}>of {fmtFull(awarded)}</span>
       </div>
     </div>
   );
@@ -69,27 +85,27 @@ function CustomTooltip({ active, payload, label }: {
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const total = payload.reduce((s, p) => s + p.value, 0);
+  const visible = (payload ?? []).filter(p => (p.value ?? 0) > 0);
+  const total = visible.reduce((s, p) => s + p.value, 0);
   return (
     <div style={{
       background: '#fff', border: '1px solid #E4E4E4', borderRadius: 8,
       padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,.12)',
-      font: '400 13px/18px var(--font-body)', minWidth: 180,
+      font: '400 13px/18px var(--font-body)', minWidth: 200,
     }}>
       <div style={{ font: '600 13px/18px var(--font-body)', color: '#242424', marginBottom: 8 }}>{label}</div>
-      {payload.map(p => (
+      {visible.map(p => (
         <div key={p.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, color: '#4B4B4B', marginBottom: 4 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0, display: 'inline-block' }} />
-            {p.name === 'amore' ? 'AmoreFood' : 'Lika Bakery'}
+            <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
           </span>
           <span style={{ fontWeight: 600 }}>{fmtFull(p.value)}</span>
         </div>
       ))}
-      {payload.length > 1 && (
+      {visible.length > 1 && (
         <div style={{ borderTop: '1px solid #EEE', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: '#242424' }}>
-          <span>Total</span>
-          <span>{fmtFull(total)}</span>
+          <span>Total</span><span>{fmtFull(total)}</span>
         </div>
       )}
     </div>
@@ -98,35 +114,35 @@ function CustomTooltip({ active, payload, label }: {
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 const TABLE_COLS = [
-  { key: 'contractWeek',            label: 'Week',         w: 90 },
-  { key: 'supplier',                label: 'Supplier',     w: 200 },
-  { key: 'actualsStatus',           label: 'Status',       w: 100 },
-  { key: 'adherencePct',            label: 'Adherence %',  w: 100 },
-  { key: 'weeklyActualQty',         label: 'Weekly Qty (g)',w: 120 },
-  { key: 'cumulativeActualSpendEur',label: 'Cum Actual',   w: 120 },
-  { key: 'cumulativeAwardedSpendEur',label: 'Cum Budget',  w: 120 },
-  { key: 'spendDiffPct',            label: 'Spend Diff %', w: 110 },
-  { key: 'budgetRisk',              label: 'Risk',         w: 80 },
+  { key: 'contractWeek',             label: 'Week',       w: 90 },
+  { key: 'category',                 label: 'Category',   w: 90 },
+  { key: 'market',                   label: 'Market',     w: 80 },
+  { key: 'supplier',                 label: 'Supplier',   w: 200 },
+  { key: 'actualsStatus',            label: 'Status',     w: 100 },
+  { key: 'adherencePct',             label: 'Adherence%', w: 100 },
+  { key: 'weeklyActualQty',          label: 'Weekly Qty', w: 110 },
+  { key: 'cumulativeActualSpendEur', label: 'Cum Actual', w: 120 },
+  { key: 'cumulativeAwardedSpendEur',label: 'Cum Budget', w: 120 },
+  { key: 'spendDiffPct',             label: 'Diff %',     w: 90  },
+  { key: 'budgetRisk',               label: 'Risk',       w: 80  },
 ] as const;
 
 type ColKey = typeof TABLE_COLS[number]['key'];
 
 function DataTable({ rows }: { rows: SpendRow[] }) {
-  const [sortKey, setSortKey]   = useState<ColKey>('contractWeek');
-  const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('asc');
+  const [sortKey, setSortKey] = useState<ColKey>('contractWeek');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => {
+  const sorted = useMemo(() =>
+    [...rows].sort((a, b) => {
       const av = a[sortKey as keyof SpendRow];
       const bv = b[sortKey as keyof SpendRow];
       const cmp = typeof av === 'number' && typeof bv === 'number'
-        ? av - bv
-        : String(av).localeCompare(String(bv));
+        ? av - bv : String(av).localeCompare(String(bv));
       return sortDir === 'asc' ? cmp : -cmp;
-    });
-  }, [rows, sortKey, sortDir]);
+    }), [rows, sortKey, sortDir]);
 
-  const toggleSort = (key: ColKey) => {
+  const toggle = (key: ColKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('asc'); }
   };
@@ -137,19 +153,15 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
         <thead>
           <tr style={{ borderBottom: '2px solid #E4E4E4' }}>
             {TABLE_COLS.map(col => (
-              <th key={col.key}
-                onClick={() => toggleSort(col.key)}
-                style={{
-                  padding: '10px 12px', textAlign: 'left', color: '#676767',
-                  font: '600 12px/16px var(--font-body)', cursor: 'pointer',
-                  whiteSpace: 'nowrap', width: col.w, userSelect: 'none',
-                  background: sortKey === col.key ? '#F8F8F8' : 'transparent',
-                }}>
+              <th key={col.key} onClick={() => toggle(col.key)} style={{
+                padding: '10px 12px', textAlign: 'left', color: '#676767',
+                font: '600 12px/16px var(--font-body)', cursor: 'pointer',
+                whiteSpace: 'nowrap', width: col.w, userSelect: 'none',
+                background: sortKey === col.key ? '#F8F8F8' : 'transparent',
+              }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {col.label}
-                  <span style={{ opacity: 0.5 }}>
-                    {sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                  </span>
+                  <span style={{ opacity: 0.5 }}>{sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
                 </span>
               </th>
             ))}
@@ -157,25 +169,31 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
         </thead>
         <tbody>
           {sorted.map((row, i) => {
-            const supplierColor = SUPPLIER_COLORS[row.supplier] ?? '#242424';
-            const isForecast    = row.actualsStatus === 'Forecast';
-            const diffColor     = row.spendDiffPct < -50 ? '#B30000' : row.spendDiffPct < -20 ? '#A43700' : '#067A46';
+            const isForecast = row.actualsStatus === 'Forecast';
+            const diffColor  = row.spendDiffPct >= -10 ? '#B30000' : row.spendDiffPct >= -40 ? '#A43700' : '#4B4B4B';
+            const catStyle   = CATEGORY_CHIP[row.category] ?? { bg: '#F5F5F5', color: '#4B4B4B' };
+            const mktStyle   = MARKET_CHIP[row.market]     ?? { bg: '#F5F5F5', color: '#4B4B4B' };
             return (
               <tr key={i} style={{ borderBottom: '1px solid #F0F0F0', background: isForecast ? '#FAFFF5' : 'transparent' }}>
                 <td style={{ padding: '9px 12px', color: '#242424', fontFamily: 'var(--font-mono)' }}>{row.contractWeek}</td>
                 <td style={{ padding: '9px 12px' }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, font: '600 11px/16px var(--font-body)', background: catStyle.bg, color: catStyle.color }}>
+                    {row.category}
+                  </span>
+                </td>
+                <td style={{ padding: '9px 12px' }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, font: '600 11px/16px var(--font-body)', background: mktStyle.bg, color: mktStyle.color }}>
+                    {row.market}
+                  </span>
+                </td>
+                <td style={{ padding: '9px 12px' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: supplierColor, flexShrink: 0, display: 'inline-block' }} />
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: SUPPLIER_COLOR[row.supplier] ?? '#BBB', flexShrink: 0, display: 'inline-block' }} />
                     <span style={{ color: '#242424', fontWeight: 500 }}>{row.supplier}</span>
                   </span>
                 </td>
                 <td style={{ padding: '9px 12px' }}>
-                  <span style={{
-                    display: 'inline-block', padding: '2px 8px', borderRadius: 20,
-                    font: '600 11px/16px var(--font-body)',
-                    background: isForecast ? '#E9FAFF' : '#F6FDE9',
-                    color: isForecast ? '#001DB2' : '#067A46',
-                  }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, font: '600 11px/16px var(--font-body)', background: isForecast ? '#E9FAFF' : '#F6FDE9', color: isForecast ? '#001DB2' : '#067A46' }}>
                     {row.actualsStatus}
                   </span>
                 </td>
@@ -185,21 +203,13 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
                 <td style={{ padding: '9px 12px', color: row.weeklyActualQty === 0 ? '#BBB' : '#242424', fontFamily: 'var(--font-mono)' }}>
                   {row.weeklyActualQty > 0 ? row.weeklyActualQty.toLocaleString() : '—'}
                 </td>
-                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: '#242424' }}>
-                  {fmtFull(row.cumulativeActualSpendEur)}
-                </td>
-                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: '#676767' }}>
-                  {fmtFull(row.cumulativeAwardedSpendEur)}
-                </td>
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: '#242424' }}>{fmtFull(row.cumulativeActualSpendEur)}</td>
+                <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: '#676767' }}>{fmtFull(row.cumulativeAwardedSpendEur)}</td>
                 <td style={{ padding: '9px 12px', fontFamily: 'var(--font-mono)', color: diffColor, fontWeight: 600 }}>
                   {row.spendDiffPct > 0 ? '+' : ''}{row.spendDiffPct}%
                 </td>
                 <td style={{ padding: '9px 12px' }}>
-                  <span style={{
-                    display: 'inline-block', padding: '2px 8px', borderRadius: 20,
-                    font: '600 11px/16px var(--font-body)',
-                    background: '#F6FDE9', color: '#067A46',
-                  }}>
+                  <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, font: '600 11px/16px var(--font-body)', background: row.budgetRisk === 'High' ? '#FEE2E2' : row.budgetRisk === 'Medium' ? '#FEF3C7' : '#F6FDE9', color: row.budgetRisk === 'High' ? '#B30000' : row.budgetRisk === 'Medium' ? '#92400E' : '#067A46' }}>
                     {row.budgetRisk}
                   </span>
                 </td>
@@ -207,11 +217,7 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
             );
           })}
           {sorted.length === 0 && (
-            <tr>
-              <td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>
-                No rows match the selected filters.
-              </td>
-            </tr>
+            <tr><td colSpan={11} style={{ padding: '32px', textAlign: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>No rows match the selected filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -219,38 +225,66 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
   );
 }
 
+// ── Filter pills ──────────────────────────────────────────────────────────────
+function FilterRow({ label, options, value, onChange }: {
+  label: string; options: string[]; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginRight: 4, whiteSpace: 'nowrap' }}>{label}:</span>
+      {options.map(opt => {
+        const active = value === opt;
+        return (
+          <button key={opt} onClick={() => onChange(opt)} style={{
+            padding: '5px 12px', borderRadius: 6,
+            border: `1.5px solid ${active ? '#067A46' : '#E4E4E4'}`,
+            background: active ? '#F6FDE9' : '#fff',
+            color: active ? '#067A46' : '#4B4B4B',
+            font: '600 12px/16px var(--font-body)',
+            cursor: 'pointer', transition: 'all 150ms',
+          }}>
+            {opt}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function SpendDashboard() {
+  const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterMarket,   setFilterMarket]   = useState<string>('All');
   const [filterStatus,   setFilterStatus]   = useState<'All' | 'Historical' | 'Forecast'>('All');
-  const [filterSupplier, setFilterSupplier] = useState<'All' | string>('All');
 
   const filteredRows = useMemo(() =>
     ROWS.filter(r =>
-      (filterStatus   === 'All' || r.actualsStatus === filterStatus) &&
-      (filterSupplier === 'All' || r.supplier      === filterSupplier)
-    ), [filterStatus, filterSupplier]);
+      (filterCategory === 'All' || r.category       === filterCategory) &&
+      (filterMarket   === 'All' || r.market         === filterMarket  ) &&
+      (filterStatus   === 'All' || r.actualsStatus  === filterStatus  )
+    ), [filterCategory, filterMarket, filterStatus]);
 
-  // Chart: only show weeks that have any spend (or are forecast)
-  const chartData = useMemo(() =>
-    WEEKLY_CHART.filter(w => w.total > 0 || w.isForecast)
-      .map(w => ({ ...w, weekLabel: w.week.replace('20', '').replace('-', ' ') }))
-  , []);
+  const metrics       = useMemo(() => computeMetrics(filteredRows),      [filteredRows]);
+  const supplierSplit = useMemo(() => computeSupplierSplit(filteredRows), [filteredRows]);
+  const weeklyRaw     = useMemo(() => computeWeeklyChart(filteredRows),  [filteredRows]);
+  const chartData     = useMemo(() => weeklyRaw.filter(w => w.total > 0 || w.isForecast), [weeklyRaw]);
 
-  const selectStyle = (active: boolean): React.CSSProperties => ({
-    padding: '6px 14px', borderRadius: 6,
-    border: `1.5px solid ${active ? '#067A46' : '#E4E4E4'}`,
-    background: active ? '#F6FDE9' : '#fff',
-    color: active ? '#067A46' : '#4B4B4B',
-    font: '600 13px/18px var(--font-body)',
-    cursor: 'pointer', transition: 'all 150ms',
-  });
+  // Top-8 suppliers by actual spend (keeps chart legend readable)
+  const chartSuppliers = useMemo(() => supplierSplit.slice(0, 8).map(s => s.supplier), [supplierSplit]);
+
+  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All';
+
+  const contextLabel = [
+    filterCategory !== 'All' ? filterCategory : 'All Categories',
+    filterMarket   !== 'All' ? filterMarket   : 'All Markets',
+  ].join(' · ');
+
+  const riskTone = (r: string) => r === 'High' ? 'danger' : r === 'Medium' ? 'warning' : 'positive';
 
   return (
     <div style={{ background: '#F8F8F8', minHeight: '100vh' }}>
       {/* Page Header */}
-      <header style={{
-        background: '#fff', borderBottom: '1px solid #EEE', padding: '22px 32px',
-      }}>
+      <header style={{ background: '#fff', borderBottom: '1px solid #EEE', padding: '22px 32px' }}>
         <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginBottom: 6, display: 'flex', gap: 6 }}>
           <span>Strategic Procurement</span>
           <span style={{ opacity: 0.4 }}>/</span>
@@ -258,201 +292,182 @@ export default function SpendDashboard() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24 }}>
           <div>
-            <h1 style={{ font: '500 30px/38px var(--font-display)', color: '#242424', margin: 0 }}>
-              Spend Analysis
-            </h1>
-            <div style={{ font: '400 13px/18px var(--font-body)', color: '#676767', marginTop: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
-              <span>Contract: {METRICS.contractStart} → {METRICS.contractEnd}</span>
+            <h1 style={{ font: '500 30px/38px var(--font-display)', color: '#242424', margin: 0 }}>Spend Analysis</h1>
+            <div style={{ font: '400 13px/18px var(--font-body)', color: '#676767', marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span>Contract: {metrics.contractStart} → 2026-W23</span>
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
-              <span>Market: DACH</span>
+              <span>{contextLabel}</span>
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
-              <span>SKU: BAK-00-127869-3 · Lebanese Flatbread</span>
+              <span>{metrics.supplierCount} supplier{metrics.supplierCount !== 1 ? 's' : ''}</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{
-              padding: '6px 12px', background: '#F6FDE9', color: '#067A46',
-              borderRadius: 6, font: '600 12px/16px var(--font-body)',
-              border: '1px solid #D2F895',
-            }}>
-              ● Live data
-            </span>
-          </div>
+          <span style={{ padding: '6px 12px', background: '#F6FDE9', color: '#067A46', borderRadius: 6, font: '600 12px/16px var(--font-body)', border: '1px solid #D2F895', whiteSpace: 'nowrap' }}>
+            ● Live data
+          </span>
         </div>
       </header>
 
-      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* ── Filter Strip ───────────────────────────────────────────────── */}
+        <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <FilterRow
+            label="Category"
+            options={['All', ...CATEGORIES]}
+            value={filterCategory}
+            onChange={v => setFilterCategory(v)}
+          />
+          <FilterRow
+            label="Market"
+            options={['All', ...MARKETS]}
+            value={filterMarket}
+            onChange={v => setFilterMarket(v)}
+          />
+          <FilterRow
+            label="Status"
+            options={['All', 'Historical', 'Forecast']}
+            value={filterStatus}
+            onChange={v => setFilterStatus(v as 'All' | 'Historical' | 'Forecast')}
+          />
+          {hasFilters && (
+            <div>
+              <button
+                onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); }}
+                style={{ padding: '5px 12px', borderRadius: 6, border: '1.5px solid #E4E4E4', background: 'transparent', color: '#676767', font: '400 12px/16px var(--font-body)', cursor: 'pointer' }}>
+                Clear all filters
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* ── KPI Strip ─────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <KpiCard
             label="Total Actual Spend"
-            value={fmtFull(METRICS.totalActualSpendEur)}
-            sub={`${METRICS.budgetUtilizationPct}% of awarded budget`}
+            value={fmtFull(metrics.totalActualSpendEur)}
+            sub={`${metrics.budgetUtilizationPct}% of awarded budget`}
             tone="neutral"
           />
           <KpiCard
             label="Awarded Budget"
-            value={fmtFull(METRICS.totalAwardedSpendEur)}
-            sub={`Remaining: ${fmtFull(METRICS.totalAwardedSpendEur - METRICS.totalActualSpendEur)}`}
+            value={fmtFull(metrics.totalAwardedSpendEur)}
+            sub={`Remaining: ${fmtFull(metrics.totalAwardedSpendEur - metrics.totalActualSpendEur)}`}
             tone="neutral"
           />
           <KpiCard
             label="Budget Utilization"
-            value={`${METRICS.budgetUtilizationPct}%`}
-            sub="vs contracted volume"
-            tone={METRICS.budgetUtilizationPct >= 80 ? 'positive' : 'warning'}
+            value={`${metrics.budgetUtilizationPct}%`}
+            sub="Actual vs contracted spend"
+            tone={metrics.budgetUtilizationPct >= 90 ? 'danger' : metrics.budgetUtilizationPct >= 75 ? 'warning' : 'neutral'}
           />
           <KpiCard
             label="Avg Adherence"
-            value={`${METRICS.avgAdherencePct}%`}
-            sub="Actual vs awarded qty"
-            tone={METRICS.avgAdherencePct >= 80 ? 'positive' : 'warning'}
+            value={`${metrics.avgAdherencePct}%`}
+            sub="Actual vs awarded volume"
+            tone={metrics.avgAdherencePct >= 80 ? 'positive' : 'warning'}
           />
           <KpiCard
             label="Active Suppliers"
-            value={String(METRICS.supplierCount)}
-            sub="DACH market"
+            value={String(metrics.supplierCount)}
+            sub={`${contextLabel}`}
             tone="neutral"
           />
           <KpiCard
-            label="Budget Risk"
-            value={METRICS.budgetRisk}
-            sub="Across all categories"
-            tone="positive"
+            label="At-Risk Contracts"
+            value={String(metrics.atRiskSuppliers)}
+            sub={`Supplier(s) ≥ 80% budget utilization`}
+            tone={metrics.atRiskSuppliers > 0 ? (metrics.atRiskSuppliers >= 3 ? 'danger' : 'warning') : 'positive'}
           />
         </div>
 
         {/* ── Charts Row ────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 16 }}>
 
-          {/* Weekly Spend Bar Chart */}
+          {/* Weekly Spend Chart */}
           <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', border: '1px solid #E4E4E4' }}>
             <div style={{ marginBottom: 16 }}>
               <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Weekly Spend (EUR)</div>
               <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
-                Actual spend per week by supplier · Weeks with activity shown · Shaded = Forecast
+                Actual spend per period by supplier · {chartSuppliers.length < supplierSplit.length ? `Top ${chartSuppliers.length} of ${supplierSplit.length} suppliers shown` : `${chartSuppliers.length} supplier${chartSuppliers.length !== 1 ? 's' : ''}`}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }} barSize={16} barCategoryGap="30%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                <XAxis
-                  dataKey="weekLabel"
-                  tick={{ fontSize: 10, fill: '#676767' }}
-                  tickLine={false} axisLine={false}
-                  interval={Math.floor(chartData.length / 10)}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#676767' }}
-                  tickLine={false} axisLine={false}
-                  tickFormatter={v => v === 0 ? '' : fmt(v)}
-                  width={52}
-                />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,122,70,.04)' }} />
-                <Legend
-                  formatter={(value) => value === 'amore' ? 'AmoreFood GmbH BAK' : 'Lika Bakery BV'}
-                  wrapperStyle={{ font: '400 12px var(--font-body)', paddingTop: 12 }}
-                />
-                <Bar dataKey="amore" stackId="a" fill="#067A46" name="amore" radius={[0, 0, 0, 0]}>
-                  {chartData.map((entry, i) => (
-                    <Cell key={i} fill={entry.isForecast ? '#96DC14' : '#067A46'} />
-                  ))}
-                </Bar>
-                <Bar dataKey="lika" stackId="a" fill="#1268FF" name="lika" radius={[4, 4, 0, 0]}>
-                  {chartData.map((entry, i) => (
-                    <Cell key={i} fill={entry.isForecast ? '#93C5FD' : '#1268FF'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }} barSize={14} barCategoryGap="28%">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
+                  <XAxis dataKey="weekLabel" tick={{ fontSize: 10, fill: '#676767' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(chartData.length / 12))} />
+                  <YAxis tick={{ fontSize: 11, fill: '#676767' }} tickLine={false} axisLine={false} tickFormatter={v => v === 0 ? '' : fmt(v)} width={52} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,122,70,.04)' }} />
+                  <Legend formatter={v => v} wrapperStyle={{ font: '400 11px var(--font-body)', paddingTop: 12 }} />
+                  {chartSuppliers.map((sup, idx) => {
+                    const color = SUPPLIER_COLOR[sup] ?? '#BBB';
+                    const isLast = idx === chartSuppliers.length - 1;
+                    return (
+                      <Bar key={sup} dataKey={supplierKey(sup)} stackId="a" fill={color} name={sup} radius={isLast ? [3, 3, 0, 0] : [0, 0, 0, 0]}>
+                        {chartData.map((entry, j) => (
+                          <Cell key={j} fill={entry.isForecast ? '#C8C8C8' : color} />
+                        ))}
+                      </Bar>
+                    );
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>
+                No spend data for selected filters
+              </div>
+            )}
           </div>
 
           {/* Supplier Split */}
-          <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', border: '1px solid #E4E4E4' }}>
-            <div style={{ marginBottom: 20 }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', border: '1px solid #E4E4E4', overflowY: 'auto', maxHeight: 380 }}>
+            <div style={{ marginBottom: 16 }}>
               <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Supplier Split</div>
               <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
-                Cumulative actual spend per supplier
+                By actual spend · {supplierSplit.length} supplier{supplierSplit.length !== 1 ? 's' : ''}
               </div>
             </div>
-
-            {SUPPLIER_SPLIT.map(s => (
+            {supplierSplit.length > 0 ? supplierSplit.map(s => (
               <SupplierBar
                 key={s.supplier}
                 supplier={s.supplier}
                 actual={s.actualEur}
                 awarded={s.awardedEur}
                 pct={s.pct}
-                color={SUPPLIER_COLORS[s.supplier] ?? '#242424'}
+                color={SUPPLIER_COLOR[s.supplier] ?? '#BBB'}
               />
-            ))}
+            )) : (
+              <div style={{ color: '#BBB', font: '400 13px/18px var(--font-body)', textAlign: 'center', padding: '32px 0' }}>No data</div>
+            )}
 
             {/* Summary */}
-            <div style={{
-              marginTop: 12, padding: '14px 16px', background: '#F8F8F8',
-              borderRadius: 8, borderLeft: '4px solid #067A46',
-            }}>
-              <div style={{ font: '600 12px/16px var(--font-body)', color: '#242424', marginBottom: 4 }}>
-                Spend vs Budget
+            {supplierSplit.length > 0 && (
+              <div style={{ marginTop: 8, padding: '12px 14px', background: '#F8F8F8', borderRadius: 8, borderLeft: `4px solid ${metrics.atRiskSuppliers > 0 ? '#DC2626' : '#067A46'}` }}>
+                <div style={{ font: '600 12px/16px var(--font-body)', color: '#242424', marginBottom: 3 }}>Spend vs Budget</div>
+                <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767' }}>
+                  {fmtFull(metrics.totalActualSpendEur)} of {fmtFull(metrics.totalAwardedSpendEur)} awarded.
+                  {' '}Utilization <strong style={{ color: metrics.budgetUtilizationPct >= 90 ? '#B30000' : metrics.budgetUtilizationPct >= 75 ? '#A43700' : '#067A46' }}>{metrics.budgetUtilizationPct}%</strong>.
+                  {metrics.atRiskSuppliers > 0 && <span style={{ color: '#B30000', fontWeight: 600 }}> {metrics.atRiskSuppliers} supplier{metrics.atRiskSuppliers !== 1 ? 's' : ''} at risk.</span>}
+                </div>
               </div>
-              <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767' }}>
-                {fmtFull(METRICS.totalActualSpendEur)} actual out of {fmtFull(METRICS.totalAwardedSpendEur)} awarded.
-                Budget utilization is <strong style={{ color: '#A43700' }}>{METRICS.budgetUtilizationPct}%</strong> — spend trailing awarded by ~{Math.round(100 - METRICS.budgetUtilizationPct)}%.
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* ── Data Table ────────────────────────────────────────────────── */}
         <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #E4E4E4' }}>
-          {/* Table Header + Filters */}
-          <div style={{
-            padding: '16px 20px', borderBottom: '1px solid #EEE',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
-          }}>
-            <div>
-              <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Contract Detail</div>
-              <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
-                {filteredRows.length} of {ROWS.length} rows · Click column header to sort
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Status filter */}
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginRight: 4 }}>Status:</span>
-                {(['All', 'Historical', 'Forecast'] as const).map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)} style={selectStyle(filterStatus === s)}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-              {/* Supplier filter */}
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginRight: 4 }}>Supplier:</span>
-                {(['All', 'AmoreFood GmbH BAK', 'Lika Bakery BV'] as const).map(s => (
-                  <button key={s} onClick={() => setFilterSupplier(s)} style={selectStyle(filterSupplier === s)}>
-                    {s === 'All' ? 'All' : s === 'AmoreFood GmbH BAK' ? 'AmoreFood' : 'Lika Bakery'}
-                  </button>
-                ))}
-              </div>
-              {(filterStatus !== 'All' || filterSupplier !== 'All') && (
-                <button
-                  onClick={() => { setFilterStatus('All'); setFilterSupplier('All'); }}
-                  style={{ padding: '6px 10px', borderRadius: 6, border: '1.5px solid #E4E4E4', background: 'transparent', color: '#676767', font: '400 12px/16px var(--font-body)', cursor: 'pointer' }}>
-                  Clear
-                </button>
-              )}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #EEE' }}>
+            <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Contract Detail</div>
+            <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
+              {filteredRows.length} of {ROWS.length} rows · Click column header to sort
             </div>
           </div>
-
           <DataTable rows={filteredRows} />
         </div>
 
         {/* Footer */}
         <div style={{ font: '400 11px/16px var(--font-body)', color: '#BBB', textAlign: 'center', paddingBottom: 8 }}>
-          HelloFresh Category Management · DACH · Data as of 2026-W19 · Confidential
+          HelloFresh Category Management · Data as of 2026-W19 · Confidential
         </div>
       </div>
     </div>
