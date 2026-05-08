@@ -5,7 +5,7 @@ import {
   ResponsiveContainer, Cell,
 } from "recharts";
 import {
-  ROWS, CATEGORIES, MARKETS,
+  ROWS, CATEGORIES, MARKETS, CATEGORY_MANAGERS,
   computeMetrics, computeSupplierSplit, computeWeeklyChart,
   supplierKey, SUPPLIER_COLOR,
   type SpendRow,
@@ -306,17 +306,19 @@ function FilterRow({ label, options, value, onChange }: {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function SpendDashboard() {
-  const [filterCategory, setFilterCategory] = useState<string>('All');
-  const [filterMarket,   setFilterMarket]   = useState<string>('All');
-  const [filterStatus,   setFilterStatus]   = useState<'All' | 'Historical' | 'Forecast'>('All');
-  const [search,         setSearch]         = useState('');
+  const [filterCategory,        setFilterCategory]        = useState<string>('All');
+  const [filterMarket,          setFilterMarket]          = useState<string>('All');
+  const [filterStatus,          setFilterStatus]          = useState<'All' | 'Historical' | 'Forecast'>('All');
+  const [filterCategoryManager, setFilterCategoryManager] = useState<string>('All');
+  const [search,                setSearch]                = useState('');
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return ROWS.filter(r => {
-      if (filterCategory !== 'All' && r.category      !== filterCategory) return false;
-      if (filterMarket   !== 'All' && r.market        !== filterMarket)   return false;
-      if (filterStatus   !== 'All' && r.actualsStatus !== filterStatus)   return false;
+      if (filterCategory        !== 'All' && r.category        !== filterCategory)        return false;
+      if (filterMarket          !== 'All' && r.market          !== filterMarket)          return false;
+      if (filterStatus          !== 'All' && r.actualsStatus   !== filterStatus)          return false;
+      if (filterCategoryManager !== 'All' && r.categoryManager !== filterCategoryManager) return false;
       if (!q) return true;
       return (
         r.supplier.toLowerCase().includes(q)          ||
@@ -330,7 +332,7 @@ export default function SpendDashboard() {
         r.categoryManager.toLowerCase().includes(q)
       );
     });
-  }, [filterCategory, filterMarket, filterStatus, search]);
+  }, [filterCategory, filterMarket, filterStatus, filterCategoryManager, search]);
 
   const metrics       = useMemo(() => computeMetrics(filteredRows),      [filteredRows]);
   const supplierSplit = useMemo(() => computeSupplierSplit(filteredRows), [filteredRows]);
@@ -340,7 +342,7 @@ export default function SpendDashboard() {
   // Top-8 suppliers by actual spend (keeps chart legend readable)
   const chartSuppliers = useMemo(() => supplierSplit.slice(0, 8).map(s => s.supplier), [supplierSplit]);
 
-  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All' || search !== '';
+  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All' || filterCategoryManager !== 'All' || search !== '';
 
   const contextLabel = [
     filterCategory !== 'All' ? filterCategory : 'All Categories',
@@ -429,10 +431,16 @@ export default function SpendDashboard() {
             value={filterStatus}
             onChange={v => setFilterStatus(v as 'All' | 'Historical' | 'Forecast')}
           />
+          <FilterRow
+            label="Cat. Manager"
+            options={['All', ...CATEGORY_MANAGERS]}
+            value={filterCategoryManager}
+            onChange={v => setFilterCategoryManager(v)}
+          />
           {hasFilters && (
             <div>
               <button
-                onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setSearch(''); }}
+                onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); }}
                 style={{ padding: '5px 12px', borderRadius: 6, border: '1.5px solid #E4E4E4', background: 'transparent', color: '#676767', font: '400 12px/16px var(--font-body)', cursor: 'pointer' }}>
                 Clear all filters
               </button>

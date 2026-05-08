@@ -255,8 +255,9 @@ const PROTEIN_ROWS: SpendRow[] = [
 export const ROWS: SpendRow[] = [...BAKERY_ROWS, ...GROCERY_ROWS, ...PROTEIN_ROWS];
 
 // Unique filter values
-export const CATEGORIES = ['Bakery', 'Grocery', 'Protein'];
-export const MARKETS    = ['BENELUX', 'DACH', 'DKSE', 'US'];
+export const CATEGORIES        = ['Bakery', 'Grocery', 'Protein'];
+export const MARKETS           = ['BENELUX', 'DACH', 'DKSE', 'US'];
+export const CATEGORY_MANAGERS = [...new Set(ROWS.map(r => r.categoryManager))].sort();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dynamic aggregation helpers
