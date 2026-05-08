@@ -305,13 +305,27 @@ export default function SpendDashboard() {
   const [filterCategory, setFilterCategory] = useState<string>('All');
   const [filterMarket,   setFilterMarket]   = useState<string>('All');
   const [filterStatus,   setFilterStatus]   = useState<'All' | 'Historical' | 'Forecast'>('All');
+  const [search,         setSearch]         = useState('');
 
-  const filteredRows = useMemo(() =>
-    ROWS.filter(r =>
-      (filterCategory === 'All' || r.category       === filterCategory) &&
-      (filterMarket   === 'All' || r.market         === filterMarket  ) &&
-      (filterStatus   === 'All' || r.actualsStatus  === filterStatus  )
-    ), [filterCategory, filterMarket, filterStatus]);
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return ROWS.filter(r => {
+      if (filterCategory !== 'All' && r.category      !== filterCategory) return false;
+      if (filterMarket   !== 'All' && r.market        !== filterMarket)   return false;
+      if (filterStatus   !== 'All' && r.actualsStatus !== filterStatus)   return false;
+      if (!q) return true;
+      return (
+        r.supplier.toLowerCase().includes(q)          ||
+        r.skuName.toLowerCase().includes(q)           ||
+        r.skuCode.toLowerCase().includes(q)           ||
+        r.globalIngredient.toLowerCase().includes(q)  ||
+        r.contractWeek.toLowerCase().includes(q)      ||
+        r.market.toLowerCase().includes(q)            ||
+        r.category.toLowerCase().includes(q)          ||
+        r.budgetRisk.toLowerCase().includes(q)
+      );
+    });
+  }, [filterCategory, filterMarket, filterStatus, search]);
 
   const metrics       = useMemo(() => computeMetrics(filteredRows),      [filteredRows]);
   const supplierSplit = useMemo(() => computeSupplierSplit(filteredRows), [filteredRows]);
@@ -321,7 +335,7 @@ export default function SpendDashboard() {
   // Top-8 suppliers by actual spend (keeps chart legend readable)
   const chartSuppliers = useMemo(() => supplierSplit.slice(0, 8).map(s => s.supplier), [supplierSplit]);
 
-  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All';
+  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All' || search !== '';
 
   const contextLabel = [
     filterCategory !== 'All' ? filterCategory : 'All Categories',
@@ -359,7 +373,39 @@ export default function SpendDashboard() {
       <div style={{ padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* ── Filter Strip ───────────────────────────────────────────────── */}
-        <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ background: '#fff', borderRadius: 10, padding: '16px 20px', border: '1px solid #E4E4E4', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* Search */}
+          <div style={{ position: 'relative' }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
+              style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+              <circle cx="6.5" cy="6.5" r="4" stroke="#9CA3AF" strokeWidth="1.5"/>
+              <path d="M10 10l3 3" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search supplier, SKU, ingredient, week, risk…"
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '8px 36px 8px 36px',
+                borderRadius: 8, border: `1.5px solid ${search ? '#067A46' : '#E4E4E4'}`,
+                font: '400 14px/20px var(--font-body)', color: '#242424',
+                outline: 'none', background: '#fff',
+                transition: 'border-color 150ms',
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{
+                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                color: '#9CA3AF', font: '400 16px/1 var(--font-body)', lineHeight: 1,
+              }}>✕</button>
+            )}
+          </div>
+
+          <div style={{ borderTop: '1px solid #F0F0F0', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <FilterRow
             label="Category"
             options={['All', ...CATEGORIES]}
@@ -381,12 +427,13 @@ export default function SpendDashboard() {
           {hasFilters && (
             <div>
               <button
-                onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); }}
+                onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setSearch(''); }}
                 style={{ padding: '5px 12px', borderRadius: 6, border: '1.5px solid #E4E4E4', background: 'transparent', color: '#676767', font: '400 12px/16px var(--font-body)', cursor: 'pointer' }}>
                 Clear all filters
               </button>
             </div>
           )}
+          </div>
         </div>
 
         {/* ── KPI Strip ─────────────────────────────────────────────────── */}
