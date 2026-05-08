@@ -5,6 +5,7 @@ export interface SpendRow {
   globalIngredient: string;
   skuName: string;
   supplier: string;
+  categoryManager: string;
   contractWeek: string;
   actualsStatus: 'Historical' | 'Forecast';
   adherencePct: number;
@@ -165,6 +166,7 @@ const BAKERY_ROWS: SpendRow[] = BAKERY_RAW.map(
     globalIngredient: 'Flatbread',
     skuName: 'Lebanese Flatbread',
     supplier,
+    categoryManager: 'Manon Turpaud',
     contractWeek,
     actualsStatus: status === 'H' ? 'Historical' : 'Forecast',
     adherencePct,
@@ -196,7 +198,7 @@ const AW_LIN  = [0,  6, 13, 19, 25, 31, 38, 44, 50, 56, 63, 69,  90]; // linear 
 
 function genRows(
   category: string, market: string, skuCode: string, skuName: string, ingredient: string,
-  supplier: string, finalActual: number, finalAwarded: number,
+  supplier: string, categoryManager: string, finalActual: number, finalAwarded: number,
   actualPat: number[], price: number,
 ): SpendRow[] {
   return CKWKS.map((week, i) => {
@@ -209,6 +211,7 @@ function genRows(
     const adh   = cumAw > 0 ? Math.min(100, Math.round(cumA / cumAw * 100)) : 0;
     return {
       category, market, skuCode, globalIngredient: ingredient, skuName, supplier,
+      categoryManager,
       contractWeek: week,
       actualsStatus: 'Historical' as const,
       adherencePct: adh,
@@ -223,30 +226,30 @@ function genRows(
 }
 
 const GROCERY_ROWS: SpendRow[] = [
-  // DACH – Penne Rigate 500g (61% util — on track)
-  ...genRows('Grocery', 'DACH', 'GRC-00-020341-1', 'Penne Rigate 500g',  'Pasta', 'Barilla GmbH',       62000, 103000, NORMAL,  2.40),
-  ...genRows('Grocery', 'DACH', 'GRC-00-020341-1', 'Penne Rigate 500g',  'Pasta', 'TortiPasta GmbH',    43000,  69000, NORMAL,  2.20),
-  // US – Spaghetti 500g (76% util — healthy)
-  ...genRows('Grocery', 'US',   'GRC-00-031122-5', 'Spaghetti 500g',     'Pasta', 'Barilla USA Inc',    92000, 121000, NORMAL,  2.60),
-  ...genRows('Grocery', 'US',   'GRC-00-031122-5', 'Spaghetti 500g',     'Pasta', 'American Pasta Co',  75000, 100000, NORMAL,  2.45),
-  // DKSE – Jasmine Rice 1kg (92% util — ⚠ budget watch)
-  ...genRows('Grocery', 'DKSE', 'GRC-00-012887-2', 'Jasmine Rice 1kg',   'Rice',  'NordicGrain AB',     43000,  46000, AT_RISK, 1.85),
-  ...genRows('Grocery', 'DKSE', 'GRC-00-012887-2', 'Jasmine Rice 1kg',   'Rice',  'Scandinavian Mills', 41000,  45000, AT_RISK, 1.90),
+  // DACH – Penne Rigate 500g (61% util — on track) · DRY / dried pastas → Iryna Zender
+  ...genRows('Grocery', 'DACH', 'GRC-00-020341-1', 'Penne Rigate 500g',  'Pasta', 'Barilla GmbH',       'Iryna Zender', 62000, 103000, NORMAL,  2.40),
+  ...genRows('Grocery', 'DACH', 'GRC-00-020341-1', 'Penne Rigate 500g',  'Pasta', 'TortiPasta GmbH',    'Iryna Zender', 43000,  69000, NORMAL,  2.20),
+  // US – Spaghetti 500g (76% util — healthy) · DRY / dried pastas → Iryna Zender
+  ...genRows('Grocery', 'US',   'GRC-00-031122-5', 'Spaghetti 500g',     'Pasta', 'Barilla USA Inc',    'Iryna Zender', 92000, 121000, NORMAL,  2.60),
+  ...genRows('Grocery', 'US',   'GRC-00-031122-5', 'Spaghetti 500g',     'Pasta', 'American Pasta Co',  'Iryna Zender', 75000, 100000, NORMAL,  2.45),
+  // DKSE – Jasmine Rice 1kg (92% util — ⚠ budget watch) · DRY / rice → Gianna Tyrpin
+  ...genRows('Grocery', 'DKSE', 'GRC-00-012887-2', 'Jasmine Rice 1kg',   'Rice',  'NordicGrain AB',     'Gianna Tyrpin', 43000,  46000, AT_RISK, 1.85),
+  ...genRows('Grocery', 'DKSE', 'GRC-00-012887-2', 'Jasmine Rice 1kg',   'Rice',  'Scandinavian Mills', 'Gianna Tyrpin', 41000,  45000, AT_RISK, 1.90),
 ];
 
 const PROTEIN_ROWS: SpendRow[] = [
-  // DACH – Chicken Breast 200g (77% util — healthy)
-  ...genRows('Protein', 'DACH',    'PRO-00-044215-8', 'Chicken Breast 200g',   'Poultry', 'Müller Fleisch GmbH',     155000, 202000, NORMAL,   5.20),
-  ...genRows('Protein', 'DACH',    'PRO-00-044215-8', 'Chicken Breast 200g',   'Poultry', 'Wiesenhof Südwest',       128000, 166000, NORMAL,   4.90),
-  // US – Atlantic Salmon Fillet (49% util — under-delivery)
-  ...genRows('Protein', 'US',      'PRO-00-058334-2', 'Atlantic Salmon Fillet','Fish',    'Pacific Coast Seafood',    59000, 120000, SLOW,     9.80),
-  ...genRows('Protein', 'US',      'PRO-00-058334-2', 'Atlantic Salmon Fillet','Fish',    'Atlantic Fresh Corp',      39000,  80000, SLOW,    10.20),
-  // DKSE – Beef Mince 500g (95% util — 🔴 critical risk)
-  ...genRows('Protein', 'DKSE',    'PRO-00-037891-6', 'Beef Mince 500g',       'Beef',    'Scandinavian Meats AB',    68000,  72000, AT_RISK,  4.60),
-  ...genRows('Protein', 'DKSE',    'PRO-00-037891-6', 'Beef Mince 500g',       'Beef',    'Nordic Beef AS',           63000,  66000, AT_RISK,  4.80),
-  // BENELUX – Chicken Thigh 300g (55% util — under-delivery)
-  ...genRows('Protein', 'BENELUX', 'PRO-00-029456-3', 'Chicken Thigh 300g',    'Poultry', 'BV ProteinsPlus',          26000,  48000, SLOW,     3.90),
-  ...genRows('Protein', 'BENELUX', 'PRO-00-029456-3', 'Chicken Thigh 300g',    'Poultry', 'Agri-Fresh BV',            22000,  39000, SLOW,     3.70),
+  // DACH – Chicken Breast 200g (77% util — healthy) · PTN / poultry → Nicolas Brosens + Laure Montazel
+  ...genRows('Protein', 'DACH',    'PRO-00-044215-8', 'Chicken Breast 200g',   'Poultry', 'Müller Fleisch GmbH',  'Nicolas Brosens + Laure Montazel', 155000, 202000, NORMAL,   5.20),
+  ...genRows('Protein', 'DACH',    'PRO-00-044215-8', 'Chicken Breast 200g',   'Poultry', 'Wiesenhof Südwest',    'Nicolas Brosens + Laure Montazel', 128000, 166000, NORMAL,   4.90),
+  // US – Atlantic Salmon Fillet (49% util — under-delivery) · PTN / finfish → Denys Lauster + Victoria Radford
+  ...genRows('Protein', 'US',      'PRO-00-058334-2', 'Atlantic Salmon Fillet','Fish',    'Pacific Coast Seafood','Denys Lauster + Victoria Radford',  59000, 120000, SLOW,     9.80),
+  ...genRows('Protein', 'US',      'PRO-00-058334-2', 'Atlantic Salmon Fillet','Fish',    'Atlantic Fresh Corp',  'Denys Lauster + Victoria Radford',  39000,  80000, SLOW,    10.20),
+  // DKSE – Beef Mince 500g (95% util — 🔴 critical risk) · PTN / bovine → Nicolò Godi + Mathilde Vannier
+  ...genRows('Protein', 'DKSE',    'PRO-00-037891-6', 'Beef Mince 500g',       'Beef',    'Scandinavian Meats AB','Nicolò Godi + Mathilde Vannier',    68000,  72000, AT_RISK,  4.60),
+  ...genRows('Protein', 'DKSE',    'PRO-00-037891-6', 'Beef Mince 500g',       'Beef',    'Nordic Beef AS',       'Nicolò Godi + Mathilde Vannier',    63000,  66000, AT_RISK,  4.80),
+  // BENELUX – Chicken Thigh 300g (55% util — under-delivery) · PTN / poultry → Nicolas Brosens + Laure Montazel
+  ...genRows('Protein', 'BENELUX', 'PRO-00-029456-3', 'Chicken Thigh 300g',    'Poultry', 'BV ProteinsPlus',      'Nicolas Brosens + Laure Montazel',  26000,  48000, SLOW,     3.90),
+  ...genRows('Protein', 'BENELUX', 'PRO-00-029456-3', 'Chicken Thigh 300g',    'Poultry', 'Agri-Fresh BV',        'Nicolas Brosens + Laure Montazel',  22000,  39000, SLOW,     3.70),
 ];
 
 export const ROWS: SpendRow[] = [...BAKERY_ROWS, ...GROCERY_ROWS, ...PROTEIN_ROWS];

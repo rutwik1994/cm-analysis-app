@@ -117,8 +117,9 @@ const TABLE_COLS = [
   { key: 'contractWeek',             label: 'Week',       w: 90 },
   { key: 'category',                 label: 'Category',   w: 90 },
   { key: 'market',                   label: 'Market',     w: 80 },
-  { key: 'supplier',                 label: 'Supplier',   w: 200 },
-  { key: 'actualsStatus',            label: 'Status',     w: 100 },
+  { key: 'supplier',                 label: 'Supplier',          w: 200 },
+  { key: 'categoryManager',          label: 'Category Manager',  w: 220 },
+  { key: 'actualsStatus',            label: 'Status',            w: 100 },
   { key: 'adherencePct',             label: 'Adherence%', w: 100 },
   { key: 'weeklyActualQty',          label: 'Weekly Qty', w: 110 },
   { key: 'cumulativeActualSpendEur', label: 'Cum Actual', w: 120 },
@@ -208,6 +209,9 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
                     <span style={{ color: '#242424', fontWeight: 500 }}>{row.supplier}</span>
                   </span>
                 </td>
+                <td style={{ padding: '9px 12px', color: '#4B4B4B', font: '400 12px/18px var(--font-body)', whiteSpace: 'nowrap' }}>
+                  {row.categoryManager}
+                </td>
                 <td style={{ padding: '9px 12px' }}>
                   <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, font: '600 11px/16px var(--font-body)', background: isForecast ? '#E9FAFF' : '#F6FDE9', color: isForecast ? '#001DB2' : '#067A46' }}>
                     {row.actualsStatus}
@@ -233,7 +237,7 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
             );
           })}
           {pageRows.length === 0 && (
-            <tr><td colSpan={11} style={{ padding: '32px', textAlign: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>No rows match the selected filters.</td></tr>
+            <tr><td colSpan={12} style={{ padding: '32px', textAlign: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>No rows match the selected filters.</td></tr>
           )}
         </tbody>
       </table>
@@ -322,7 +326,8 @@ export default function SpendDashboard() {
         r.contractWeek.toLowerCase().includes(q)      ||
         r.market.toLowerCase().includes(q)            ||
         r.category.toLowerCase().includes(q)          ||
-        r.budgetRisk.toLowerCase().includes(q)
+        r.budgetRisk.toLowerCase().includes(q)         ||
+        r.categoryManager.toLowerCase().includes(q)
       );
     });
   }, [filterCategory, filterMarket, filterStatus, search]);
