@@ -129,9 +129,13 @@ const TABLE_COLS = [
 
 type ColKey = typeof TABLE_COLS[number]['key'];
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 function DataTable({ rows }: { rows: SpendRow[] }) {
   const [sortKey, setSortKey] = useState<ColKey>('contractWeek');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage]       = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const sorted = useMemo(() =>
     [...rows].sort((a, b) => {
@@ -142,12 +146,24 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
       return sortDir === 'asc' ? cmp : -cmp;
     }), [rows, sortKey, sortDir]);
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage   = Math.min(page, totalPages);
+  const pageRows   = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const toggle = (key: ColKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir('asc'); }
+    setPage(1);
   };
 
+  const btnStyle = (enabled: boolean): React.CSSProperties => ({
+    padding: '5px 10px', borderRadius: 6, border: '1.5px solid #E4E4E4',
+    background: enabled ? '#fff' : '#F8F8F8', color: enabled ? '#242424' : '#BBB',
+    font: '600 12px/16px var(--font-body)', cursor: enabled ? 'pointer' : 'default',
+  });
+
   return (
+    <div>
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', font: '400 13px/18px var(--font-body)' }}>
         <thead>
@@ -168,7 +184,7 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((row, i) => {
+          {pageRows.map((row, i) => {
             const isForecast = row.actualsStatus === 'Forecast';
             const diffColor  = row.spendDiffPct >= -10 ? '#B30000' : row.spendDiffPct >= -40 ? '#A43700' : '#4B4B4B';
             const catStyle   = CATEGORY_CHIP[row.category] ?? { bg: '#F5F5F5', color: '#4B4B4B' };
@@ -216,11 +232,44 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
               </tr>
             );
           })}
-          {sorted.length === 0 && (
+          {pageRows.length === 0 && (
             <tr><td colSpan={11} style={{ padding: '32px', textAlign: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>No rows match the selected filters.</td></tr>
           )}
         </tbody>
       </table>
+    </div>
+
+    {/* Pagination footer */}
+    <div style={{
+      padding: '12px 20px', borderTop: '1px solid #EEE',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767' }}>Rows per page:</span>
+        {PAGE_SIZE_OPTIONS.map(n => (
+          <button key={n} onClick={() => { setPageSize(n); setPage(1); }} style={{
+            padding: '4px 10px', borderRadius: 6,
+            border: `1.5px solid ${pageSize === n ? '#067A46' : '#E4E4E4'}`,
+            background: pageSize === n ? '#F6FDE9' : '#fff',
+            color: pageSize === n ? '#067A46' : '#4B4B4B',
+            font: '600 12px/16px var(--font-body)', cursor: 'pointer',
+          }}>{n}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ font: '400 12px/16px var(--font-body)', color: '#676767' }}>
+          {sorted.length === 0 ? '0 rows' : `${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, sorted.length)} of ${sorted.length}`}
+        </span>
+        <button onClick={() => setPage(1)}        disabled={safePage === 1}          style={btnStyle(safePage > 1)}>«</button>
+        <button onClick={() => setPage(p => p - 1)} disabled={safePage === 1}        style={btnStyle(safePage > 1)}>‹</button>
+        <span style={{ font: '600 12px/16px var(--font-body)', color: '#242424', minWidth: 60, textAlign: 'center' }}>
+          {safePage} / {totalPages}
+        </span>
+        <button onClick={() => setPage(p => p + 1)} disabled={safePage === totalPages} style={btnStyle(safePage < totalPages)}>›</button>
+        <button onClick={() => setPage(totalPages)} disabled={safePage === totalPages} style={btnStyle(safePage < totalPages)}>»</button>
+      </div>
+    </div>
     </div>
   );
 }
@@ -459,7 +508,7 @@ export default function SpendDashboard() {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #EEE' }}>
             <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Contract Detail</div>
             <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
-              {filteredRows.length} of {ROWS.length} rows · Click column header to sort
+              {filteredRows.length} of {ROWS.length} rows · Click column header to sort · 25 / 50 / 100 per page
             </div>
           </div>
           <DataTable rows={filteredRows} />
