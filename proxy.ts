@@ -8,7 +8,7 @@ export function proxy(request: NextRequest) {
   if (PUBLIC.some(p => pathname.startsWith(p))) return NextResponse.next();
 
   const token = request.cookies.get(AUTH_COOKIE)?.value;
-  const expected = process.env.APP_PASSWORD ?? 'hf-procurement-2024';
+  const expected = process.env.APP_PASSWORD ?? 'hf-procurement-2027';
 
   if (token !== expected) {
     const url = new URL('/login', request.url);
