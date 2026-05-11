@@ -64,10 +64,10 @@ export function Sidebar() {
           width: 28, height: 28, borderRadius: 6, background: C.accent, flexShrink: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           color: C.head, font: '700 14px/1 var(--font-body)',
-        }}>S</span>
+        }}>P</span>
         <div>
-          <div style={{ font: '700 14px/18px var(--font-body)' }}>SAGE</div>
-          <div style={{ font: '400 11px/14px var(--font-body)', color: C.muted }}>Procurement Analytics</div>
+          <div style={{ font: '700 14px/18px var(--font-body)' }}>Procurement Analytics</div>
+          <div style={{ font: '400 11px/14px var(--font-body)', color: C.muted }}>Category Management</div>
         </div>
       </div>
 
@@ -145,7 +145,7 @@ export function Sidebar() {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ font: '600 12px/16px var(--font-body)', color: C.fg }}>Rutwik Godse</div>
-          <div style={{ font: '400 11px/14px var(--font-body)', color: C.muted }}>VP Strategic Procurement</div>
+          <div style={{ font: '400 11px/14px var(--font-body)', color: C.muted }}>Strategic Procurement</div>
         </div>
         <form action="/api/logout" method="POST">
           <button type="submit" title="Sign out" style={{
