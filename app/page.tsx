@@ -114,29 +114,39 @@ function CustomTooltip({ active, payload, label }: {
 
 // ── Info tooltip ──────────────────────────────────────────────────────────────
 function InfoTip({ text }: { text: string }) {
-  const [show, setShow] = React.useState(false);
+  const [pos, setPos] = React.useState<{ x: number; y: number } | null>(null);
+
+  const handleEnter = (e: React.MouseEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top - 8 });
+  };
+
   return (
     <span
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      onMouseEnter={handleEnter}
+      onMouseLeave={() => setPos(null)}
       onClick={e => e.stopPropagation()}
-      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 4, cursor: 'default' }}
+      style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 4, cursor: 'default' }}
     >
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.45, flexShrink: 0 }}>
         <circle cx="8" cy="8" r="7" stroke="#676767" strokeWidth="1.5"/>
         <path d="M8 7v5M8 5v.5" stroke="#676767" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
-      {show && (
+      {pos && (
         <span style={{
-          position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-          marginBottom: 6, background: '#242424', color: '#fff',
-          font: '400 11px/15px var(--font-body)', padding: '5px 9px',
-          borderRadius: 6, whiteSpace: 'nowrap', zIndex: 50,
-          boxShadow: '0 2px 8px rgba(0,0,0,.2)',
+          position: 'fixed',
+          left: pos.x, top: pos.y,
+          transform: 'translate(-50%, -100%)',
+          background: '#242424', color: '#fff',
+          font: '400 12px/16px var(--font-body)', padding: '6px 10px',
+          borderRadius: 6, whiteSpace: 'nowrap', zIndex: 9999,
+          boxShadow: '0 4px 12px rgba(0,0,0,.25)',
           pointerEvents: 'none',
+          maxWidth: 280,
+          textAlign: 'left' as const,
         }}>
           {text}
-          <span style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid #242424' }} />
+          <span style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #242424' }} />
         </span>
       )}
     </span>
