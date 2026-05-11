@@ -422,7 +422,7 @@ export default function SpendDashboard() {
           <div>
             <h1 style={{ font: '500 30px/38px var(--font-display)', color: '#242424', margin: 0 }}>Spend Analysis</h1>
             <div style={{ font: '400 13px/18px var(--font-body)', color: '#676767', marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span>Contract: {metrics.contractStart} → 2026-W23</span>
+              <span>Contract period: Jun 2025 – Jun 2026</span>
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
               <span>{contextLabel}</span>
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
