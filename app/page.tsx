@@ -113,6 +113,18 @@ function CustomTooltip({ active, payload, label }: {
 }
 
 // ── Info tooltip ──────────────────────────────────────────────────────────────
+// Custom angled tick for XAxis — avoids TypeScript issues with angle in tick prop object
+function AngledTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  if (!payload) return null;
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={4} textAnchor="end" fill="#676767" fontSize={9} transform="rotate(-40)">
+        {payload.value}
+      </text>
+    </g>
+  );
+}
+
 function InfoTip({ text }: { text: string }) {
   const [pos, setPos] = React.useState<{ x: number; y: number } | null>(null);
 
@@ -558,7 +570,7 @@ export default function SpendDashboard() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                   <XAxis
                     dataKey="weekLabel"
-                    tick={{ fontSize: 9, fill: '#676767', angle: -40, textAnchor: 'end', dy: 2 }}
+                    tick={<AngledTick />}
                     tickLine={{ stroke: '#E0E0E0', strokeWidth: 1 }}
                     axisLine={false}
                     interval={Math.max(0, Math.ceil(chartData.length / 16) - 1)}
