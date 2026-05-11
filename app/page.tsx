@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, Cell,
+  ResponsiveContainer, Cell, Brush,
 } from "recharts";
 import {
   ROWS, CATEGORIES, MARKETS, CATEGORY_MANAGERS,
@@ -409,6 +409,43 @@ export default function SpendDashboard() {
   const weeklyRaw     = useMemo(() => computeWeeklyChart(filteredRows),  [filteredRows]);
   const chartData     = useMemo(() => weeklyRaw.filter(w => w.total > 0 || w.isForecast), [weeklyRaw]);
 
+  // Brush range: [startIndex, endIndex] into chartData
+  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
+
+  // Reset brush when chart data changes (filter/category switch)
+  const prevChartLen = React.useRef(chartData.length);
+  React.useEffect(() => {
+    if (prevChartLen.current !== chartData.length) {
+      setBrushRange(null);
+      prevChartLen.current = chartData.length;
+    }
+  }, [chartData.length]);
+
+  const WEEK_PRESETS = [
+    { label: '4W',  weeks: 4 },
+    { label: '8W',  weeks: 8 },
+    { label: '13W', weeks: 13 },
+    { label: 'All', weeks: null },
+  ];
+
+  function applyWeekPreset(weeks: number | null) {
+    if (weeks === null || chartData.length === 0) {
+      setBrushRange(null);
+    } else {
+      const end = chartData.length - 1;
+      const start = Math.max(0, end - weeks + 1);
+      setBrushRange({ startIndex: start, endIndex: end });
+    }
+  }
+
+  // Determine active preset label for highlight
+  const activeBrushPreset = React.useMemo(() => {
+    if (!brushRange) return 'All';
+    const span = brushRange.endIndex - brushRange.startIndex + 1;
+    const match = WEEK_PRESETS.find(p => p.weeks === span && brushRange.endIndex === chartData.length - 1);
+    return match ? match.label : null;
+  }, [brushRange, chartData.length]);
+
   // Top-8 suppliers by actual spend (keeps chart legend readable)
   const chartSuppliers = useMemo(() => supplierSplit.slice(0, 8).map(s => s.supplier), [supplierSplit]);
 
@@ -558,15 +595,38 @@ export default function SpendDashboard() {
 
           {/* Weekly Spend Chart */}
           <div style={{ background: '#fff', borderRadius: 10, padding: '20px 24px', border: '1px solid #E4E4E4' }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Weekly Spend (EUR)</div>
-              <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
-                Actual spend per period by supplier · {chartSuppliers.length < supplierSplit.length ? `Top ${chartSuppliers.length} of ${supplierSplit.length} suppliers shown` : `${chartSuppliers.length} supplier${chartSuppliers.length !== 1 ? 's' : ''}`}
+            {/* Chart header row */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+              <div>
+                <div style={{ font: '600 15px/20px var(--font-body)', color: '#242424' }}>Weekly Spend (EUR)</div>
+                <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginTop: 2 }}>
+                  Actual spend per period by supplier · {chartSuppliers.length < supplierSplit.length ? `Top ${chartSuppliers.length} of ${supplierSplit.length} suppliers shown` : `${chartSuppliers.length} supplier${chartSuppliers.length !== 1 ? 's' : ''}`}
+                </div>
               </div>
+              {/* Week preset buttons */}
+              {chartData.length > 0 && (
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {WEEK_PRESETS.map(p => {
+                    const isActive = activeBrushPreset === p.label;
+                    return (
+                      <button key={p.label} onClick={() => applyWeekPreset(p.weeks)}
+                        style={{
+                          padding: '3px 9px', borderRadius: 5, border: `1px solid ${isActive ? '#067A46' : '#D4D4D4'}`,
+                          background: isActive ? '#067A46' : '#fff',
+                          color: isActive ? '#fff' : '#555',
+                          font: '500 11px/18px var(--font-body)', cursor: 'pointer',
+                          transition: 'all 120ms',
+                        }}>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 20, left: 0 }} barSize={14} barCategoryGap="28%">
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }} barSize={14} barCategoryGap="28%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
                   <XAxis
                     dataKey="weekLabel"
@@ -578,7 +638,7 @@ export default function SpendDashboard() {
                   />
                   <YAxis tick={{ fontSize: 11, fill: '#676767' }} tickLine={false} axisLine={false} tickFormatter={v => v === 0 ? '' : fmt(v)} width={52} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,122,70,.04)' }} />
-                  <Legend formatter={v => v} wrapperStyle={{ font: '400 11px var(--font-body)', paddingTop: 12 }} />
+                  <Legend formatter={v => v} wrapperStyle={{ font: '400 11px var(--font-body)', paddingTop: 8 }} />
                   {chartSuppliers.map((sup, idx) => {
                     const color = SUPPLIER_COLOR[sup] ?? '#BBB';
                     const isLast = idx === chartSuppliers.length - 1;
@@ -590,10 +650,24 @@ export default function SpendDashboard() {
                       </Bar>
                     );
                   })}
+                  <Brush
+                    dataKey="weekLabel"
+                    height={22}
+                    stroke="#D4D4D4"
+                    fill="#F8F8F8"
+                    travellerWidth={6}
+                    startIndex={brushRange?.startIndex ?? 0}
+                    endIndex={brushRange?.endIndex ?? (chartData.length - 1)}
+                    onChange={(range) => {
+                      if (range && typeof range.startIndex === 'number' && typeof range.endIndex === 'number') {
+                        setBrushRange({ startIndex: range.startIndex, endIndex: range.endIndex });
+                      }
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>
+              <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#BBB', font: '400 14px/20px var(--font-body)' }}>
                 No spend data for selected filters
               </div>
             )}
