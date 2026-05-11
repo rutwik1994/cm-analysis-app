@@ -554,9 +554,16 @@ export default function SpendDashboard() {
             </div>
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 4, left: 0 }} barSize={14} barCategoryGap="28%">
+                <BarChart data={chartData} margin={{ top: 4, right: 4, bottom: 20, left: 0 }} barSize={14} barCategoryGap="28%">
                   <CartesianGrid strokeDasharray="3 3" stroke="#F0F0F0" vertical={false} />
-                  <XAxis dataKey="weekLabel" tick={{ fontSize: 10, fill: '#676767' }} tickLine={false} axisLine={false} interval={Math.max(0, Math.floor(chartData.length / 12))} />
+                  <XAxis
+                    dataKey="weekLabel"
+                    tick={{ fontSize: 9, fill: '#676767', angle: -40, textAnchor: 'end', dy: 2 }}
+                    tickLine={{ stroke: '#E0E0E0', strokeWidth: 1 }}
+                    axisLine={false}
+                    interval={Math.max(0, Math.ceil(chartData.length / 16) - 1)}
+                    height={42}
+                  />
                   <YAxis tick={{ fontSize: 11, fill: '#676767' }} tickLine={false} axisLine={false} tickFormatter={v => v === 0 ? '' : fmt(v)} width={52} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,122,70,.04)' }} />
                   <Legend formatter={v => v} wrapperStyle={{ font: '400 11px var(--font-body)', paddingTop: 12 }} />
