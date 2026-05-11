@@ -112,20 +112,51 @@ function CustomTooltip({ active, payload, label }: {
   );
 }
 
+// ── Info tooltip ──────────────────────────────────────────────────────────────
+function InfoTip({ text }: { text: string }) {
+  const [show, setShow] = React.useState(false);
+  return (
+    <span
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onClick={e => e.stopPropagation()}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 4, cursor: 'default' }}
+    >
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.45, flexShrink: 0 }}>
+        <circle cx="8" cy="8" r="7" stroke="#676767" strokeWidth="1.5"/>
+        <path d="M8 7v5M8 5v.5" stroke="#676767" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+      {show && (
+        <span style={{
+          position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+          marginBottom: 6, background: '#242424', color: '#fff',
+          font: '400 11px/15px var(--font-body)', padding: '5px 9px',
+          borderRadius: 6, whiteSpace: 'nowrap', zIndex: 50,
+          boxShadow: '0 2px 8px rgba(0,0,0,.2)',
+          pointerEvents: 'none',
+        }}>
+          {text}
+          <span style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '4px solid transparent', borderRight: '4px solid transparent', borderTop: '4px solid #242424' }} />
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Table ─────────────────────────────────────────────────────────────────────
 const TABLE_COLS = [
-  { key: 'contractWeek',             label: 'Week',       w: 90 },
-  { key: 'category',                 label: 'Category',   w: 90 },
-  { key: 'market',                   label: 'Market',     w: 80 },
-  { key: 'supplier',                 label: 'Supplier',          w: 200 },
-  { key: 'categoryManager',          label: 'Category Manager',  w: 220 },
-  { key: 'actualsStatus',            label: 'Status',            w: 100 },
-  { key: 'adherencePct',             label: 'Adherence%', w: 100 },
-  { key: 'weeklyActualQty',          label: 'Weekly Qty', w: 110 },
-  { key: 'cumulativeActualSpendEur', label: 'Cum Actual', w: 120 },
-  { key: 'cumulativeAwardedSpendEur',label: 'Cum Budget', w: 120 },
-  { key: 'spendDiffPct',             label: 'Diff %',     w: 90  },
-  { key: 'budgetRisk',               label: 'Risk',       w: 80  },
+  { key: 'contractWeek',             label: 'Week',            tip: 'ISO contract week (e.g. 2025-W32)',                                    w: 90  },
+  { key: 'category',                 label: 'Category',        tip: 'Product category: Bakery, Grocery or Protein',                         w: 90  },
+  { key: 'market',                   label: 'Market',          tip: 'Geographic market (DACH, US, DKSE, BENELUX)',                           w: 80  },
+  { key: 'supplier',                 label: 'Supplier',        tip: 'Contracted supplier for this SKU',                                     w: 200 },
+  { key: 'categoryManager',          label: 'Cat. Manager',    tip: 'EU/UK category manager responsible for this SKU',                      w: 200 },
+  { key: 'actualsStatus',            label: 'Status',          tip: 'Historical = confirmed actuals; Forecast = projected spend',           w: 100 },
+  { key: 'adherencePct',             label: 'Adherence %',     tip: 'Actual volume delivered vs contracted volume (%)',                     w: 100 },
+  { key: 'weeklyActualQty',          label: 'Period Qty',      tip: 'Units delivered in this period',                                       w: 100 },
+  { key: 'cumulativeActualSpendEur', label: 'Spend to Date',   tip: 'Total actual spend accumulated from contract start to this week (€)',  w: 130 },
+  { key: 'cumulativeAwardedSpendEur',label: 'Awarded Budget',  tip: 'Total contracted/awarded budget accumulated to this week (€)',         w: 130 },
+  { key: 'spendDiffPct',             label: 'vs Budget %',     tip: 'Variance: actual spend vs awarded budget (negative = under-spending)', w: 100 },
+  { key: 'budgetRisk',               label: 'Risk',            tip: 'Budget exhaustion risk: High (≥ −10%), Medium (≥ −40%), Low (< −40%)', w: 80  },
 ] as const;
 
 type ColKey = typeof TABLE_COLS[number]['key'];
@@ -179,6 +210,7 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   {col.label}
                   <span style={{ opacity: 0.5 }}>{sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+                  <InfoTip text={col.tip} />
                 </span>
               </th>
             ))}
