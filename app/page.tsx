@@ -352,7 +352,7 @@ export default function SpendDashboard() {
   const [showBrief,        setShowBrief]        = useState(false);
   const [brief,            setBrief]            = useState('');
   const [briefLoading,     setBriefLoading]     = useState(false);
-  const [anomalyDismissed, setAnomalyDismissed] = useState(false);
+  const [anomalyDismissed, setAnomalyDismissed] = useState(true);
   const [showYoY,          setShowYoY]          = useState(false);
 
   // ── Filtered Data ─────────────────────────────────────────────────────────────
@@ -457,7 +457,6 @@ export default function SpendDashboard() {
     { label: 'Bakery',     apply: () => { setFilterCategory('Bakery');  setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
     { label: 'Grocery',    apply: () => { setFilterCategory('Grocery'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
     { label: 'Protein',    apply: () => { setFilterCategory('Protein'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: '🔮 Forecast', apply: () => { setFilterStatus('Forecast'); setFilterCategory('All'); setFilterMarket('All'); setFilterCategoryManager('All'); setSearch(''); } },
     { label: 'DACH',       apply: () => { setFilterMarket('DACH');   setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
     { label: 'US',         apply: () => { setFilterMarket('US');     setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
     { label: 'DKSE',       apply: () => { setFilterMarket('DKSE');   setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
@@ -467,7 +466,6 @@ export default function SpendDashboard() {
     if (label === 'Bakery')     return filterCategory === 'Bakery'  && filterMarket === 'All' && filterStatus === 'All';
     if (label === 'Grocery')    return filterCategory === 'Grocery' && filterMarket === 'All' && filterStatus === 'All';
     if (label === 'Protein')    return filterCategory === 'Protein' && filterMarket === 'All' && filterStatus === 'All';
-    if (label === '🔮 Forecast') return filterStatus === 'Forecast';
     if (label === 'DACH')       return filterMarket === 'DACH';
     if (label === 'US')         return filterMarket === 'US';
     if (label === 'DKSE')       return filterMarket === 'DKSE';

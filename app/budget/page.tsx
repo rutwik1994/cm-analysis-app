@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   ComposedChart,
   BarChart,
@@ -74,11 +74,72 @@ function buildWeeklyActuals() {
   return { weekMap, weekIsForecast, allWeeks };
 }
 
+// ─── InfoTip: tooltip with definition on hover ───────────────────────────────
+
+function InfoTip({ text }: { text: string }) {
+  const [pos, setPos] = React.useState<{ x: number; y: number } | null>(null);
+  const handleEnter = (e: React.MouseEvent) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top - 8 });
+  };
+  return (
+    <span
+      onMouseEnter={handleEnter}
+      onMouseLeave={() => setPos(null)}
+      onClick={(e) => e.stopPropagation()}
+      style={{ display: "inline-flex", alignItems: "center", marginLeft: 6, cursor: "help", verticalAlign: "middle" }}
+    >
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.5, flexShrink: 0 }}>
+        <circle cx="8" cy="8" r="7" stroke="#676767" strokeWidth="1.5" />
+        <path d="M8 7v5M8 5v.5" stroke="#676767" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      {pos && (
+        <span
+          style={{
+            position: "fixed",
+            left: pos.x,
+            top: pos.y,
+            transform: "translate(-50%, -100%)",
+            background: "#242424",
+            color: "#fff",
+            font: "400 12px/17px var(--font-body)",
+            padding: "8px 12px",
+            borderRadius: 6,
+            zIndex: 9999,
+            boxShadow: "0 4px 12px rgba(0,0,0,.25)",
+            pointerEvents: "none",
+            maxWidth: 280,
+            minWidth: 200,
+            whiteSpace: "normal",
+            textAlign: "left" as const,
+          }}
+        >
+          {text}
+          <span
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 0,
+              height: 0,
+              borderLeft: "5px solid transparent",
+              borderRight: "5px solid transparent",
+              borderTop: "5px solid #242424",
+            }}
+          />
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ─── slider component ────────────────────────────────────────────────────────
 
 interface SliderProps {
   label: string;
   description: string;
+  tooltip?: string;
   value: number;
   min: number;
   max: number;
@@ -90,6 +151,7 @@ interface SliderProps {
 function SliderControl({
   label,
   description,
+  tooltip,
   value,
   min,
   max,
@@ -128,9 +190,12 @@ function SliderControl({
               fontSize: 14,
               fontWeight: 600,
               color: "#242424",
+              display: "flex",
+              alignItems: "center",
             }}
           >
             {label}
+            {tooltip && <InfoTip text={tooltip} />}
           </div>
           <div style={{ fontSize: 12, color: "#676767", marginTop: 2 }}>
             {description}
@@ -564,18 +629,21 @@ export default function Page() {
           {[
             {
               label: "Total Awarded Budget",
+              tooltip: "The contracted budget ceiling agreed with suppliers across the full contract period (Jun 2025 – Jun 2026). This is the maximum we're authorised to spend.",
               value: fmt(metrics.totalAwardedSpendEur),
               sub: `${metrics.supplierCount} suppliers · ${metrics.contractStart} → W23/2026`,
               accent: "#242424",
             },
             {
               label: "Total Actual Spend",
+              tooltip: "Cumulative actual spend across all suppliers from contract start through the current reporting week (W19/2026). Sum of each supplier's latest cumulative actual.",
               value: fmt(metrics.totalActualSpendEur),
               sub: `${metrics.budgetUtilizationPct}% of awarded · through W19/2026`,
               accent: "#067A46",
             },
             {
               label: "Forecast End-of-Contract",
+              tooltip: "Projected total spend at contract end (W23/2026) if we continue at the current weekly run-rate. Formula: actual spend ÷ 44 elapsed weeks × 52 total weeks. Red if it exceeds the awarded budget.",
               value: fmt(baselineForecast),
               sub: `Extrapolated at current run-rate (${fmt(
                 Math.round(metrics.totalActualSpendEur / ELAPSED_WEEKS)
@@ -595,8 +663,9 @@ export default function Page() {
                 padding: "20px 24px",
               }}
             >
-              <div style={{ fontSize: 12, color: "#676767", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: "#676767", marginBottom: 8, display: "flex", alignItems: "center" }}>
                 {kpi.label}
+                <InfoTip text={kpi.tooltip} />
               </div>
               <div
                 style={{
@@ -654,6 +723,7 @@ export default function Page() {
               <SliderControl
                 label="Volume Adjustment"
                 description="Simulate ordering more or fewer units across all categories"
+                tooltip="Models a change in order quantities — e.g. menu expansion, customer growth, or seasonal demand swings. +10% means we order 10% more volume across all suppliers; spend scales linearly."
                 value={volumeAdj}
                 min={-30}
                 max={30}
@@ -664,6 +734,7 @@ export default function Page() {
               <SliderControl
                 label="Price Inflation"
                 description="Simulate commodity price changes affecting unit costs"
+                tooltip="Models commodity price movement (wheat, beef, fuel surcharges, etc.). +10% means unit prices rise 10% with volume held constant. Useful to stress-test against commodity shocks."
                 value={priceAdj}
                 min={-20}
                 max={20}
@@ -674,6 +745,7 @@ export default function Page() {
               <SliderControl
                 label="Supplier Consolidation"
                 description="Efficiency gain from moving spend to better-performing suppliers"
+                tooltip="Models moving spend away from underperformers toward top suppliers. Each 100% of consolidation yields ~15% efficiency. Use this to size the savings case for supplier rationalisation."
                 value={consolidationAdj}
                 min={0}
                 max={40}
