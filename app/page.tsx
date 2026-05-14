@@ -473,27 +473,36 @@ export default function SpendDashboard() {
     const lines: string[] = [];
     lines.push(`## Current Dashboard View`);
     lines.push(`Filters: Category=${filterCategory}, Market=${filterMarket}, Status=${filterStatus}, Category Manager=${filterCategoryManager}`);
-    lines.push(`Total rows: ${filteredRows.length}`);
     lines.push('');
+
     lines.push(`## Key Metrics`);
     lines.push(`- Total Actual Spend: €${metrics.totalActualSpendEur.toLocaleString('de-DE')}`);
     lines.push(`- Total Awarded Budget: €${metrics.totalAwardedSpendEur.toLocaleString('de-DE')}`);
     lines.push(`- Budget Utilisation: ${metrics.budgetUtilizationPct}%`);
     lines.push(`- Suppliers at risk (≥80% utilisation): ${metrics.atRiskSuppliers}`);
     lines.push(`- Total Suppliers: ${metrics.supplierCount}`);
-    lines.push(`- At-risk flag: ${metrics.atRiskSuppliers > 0 ? 'Yes' : 'No'}`);
     lines.push('');
-    lines.push(`## Supplier Split (by actual spend)`);
-    supplierSplit.forEach(s => {
-      const util = s.awardedEur > 0 ? Math.round(s.actualEur / s.awardedEur * 100) : 0;
-      lines.push(`- ${s.supplier}: €${s.actualEur.toLocaleString('de-DE')} actual / €${s.awardedEur.toLocaleString('de-DE')} awarded (${util}% utilisation, ${s.pct.toFixed(1)}% of total spend)`);
+
+    // Deduplicated supplier summary — one row per supplier with category manager, category, market
+    const supplierMap = new Map<string, { category: string; market: string; categoryManager: string; actualEur: number; awardedEur: number }>();
+    filteredRows.forEach(r => {
+      const key = r.supplier;
+      if (!supplierMap.has(key)) {
+        supplierMap.set(key, { category: r.category, market: r.market, categoryManager: r.categoryManager, actualEur: 0, awardedEur: 0 });
+      }
+      const entry = supplierMap.get(key)!;
+      entry.actualEur = Math.max(entry.actualEur, r.cumulativeActualSpendEur);
+      entry.awardedEur = Math.max(entry.awardedEur, r.cumulativeAwardedSpendEur);
     });
-    lines.push('');
-    lines.push(`## Contract Rows (up to 80, sorted by supplier)`);
-    lines.push(`Supplier | Category | Market | SKU | Ingredient | Actual Spend | Awarded | vs Budget% | Status | Category Manager`);
-    filteredRows.slice(0, 80).forEach(r => {
-      lines.push(`${r.supplier} | ${r.category} | ${r.market} | ${r.skuName} | ${r.globalIngredient} | €${r.cumulativeActualSpendEur.toLocaleString()} | €${r.cumulativeAwardedSpendEur.toLocaleString()} | ${r.spendDiffPct.toFixed(1)}% | ${r.actualsStatus} | ${r.categoryManager}`);
+
+    lines.push(`## All Suppliers in Current View (${supplierMap.size} total)`);
+    lines.push(`Supplier | Category | Market | Category Manager | Actual Spend | Awarded Budget | Utilisation %`);
+    supplierMap.forEach((v, supplier) => {
+      const util = v.awardedEur > 0 ? Math.round(v.actualEur / v.awardedEur * 100) : 0;
+      const risk = util >= 80 ? ' ⚠ AT RISK' : '';
+      lines.push(`${supplier} | ${v.category} | ${v.market} | ${v.categoryManager} | €${v.actualEur.toLocaleString('de-DE')} | €${v.awardedEur.toLocaleString('de-DE')} | ${util}%${risk}`);
     });
+
     return lines.join('\n');
   };
 
