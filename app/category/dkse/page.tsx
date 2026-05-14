@@ -123,7 +123,7 @@ function CmSection({ name, suppliers, rows, marketLabel }: { name: string; suppl
         <span style={{ font: "600 12px/16px var(--font-body)", padding: "5px 12px", borderRadius: 99, background: "#EFF6FF", color: "#1E40AF", border: "1px solid #BFDBFE" }}>Contact</span>
       </div>
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        {[{ label: "Portfolio Spend", value: fmt(metrics.totalActualSpendEur) }, { label: "Budget Util", value: `${metrics.budgetUtilizationPct}%` }, { label: "At-Risk", value: String(metrics.atRiskSuppliers) }].map(k => (
+        {[{ label: "Portfolio Spend", value: fmt(metrics.totalActualSpendEur) }, { label: "Budget Utilisation", value: `${metrics.budgetUtilizationPct}%` }, { label: "At-Risk", value: String(metrics.atRiskSuppliers) }].map(k => (
           <div key={k.label} style={{ background: "#F8F8F8", borderRadius: 8, padding: "10px 16px", minWidth: 120 }}>
             <div style={{ font: "400 10px/14px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em" }}>{k.label}</div>
             <div style={{ font: "700 18px/24px var(--font-display)", color: "#242424", marginTop: 2 }}>{k.value}</div>

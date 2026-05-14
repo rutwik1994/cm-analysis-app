@@ -330,8 +330,6 @@ function FilterSelect({ label, options, value, onChange }: {
 }
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
-type ChatMessage = { role: 'user' | 'assistant'; text: string };
-
 export default function SpendDashboard() {
   // ── Filters ──────────────────────────────────────────────────────────────────
   const [filterCategory,        setFilterCategory]        = useState<string>('All');
@@ -339,13 +337,6 @@ export default function SpendDashboard() {
   const [filterStatus,          setFilterStatus]          = useState<'All' | 'Historical' | 'Forecast'>('All');
   const [filterCategoryManager, setFilterCategoryManager] = useState<string>('All');
   const [search,                setSearch]                = useState('');
-
-  // ── Chat ──────────────────────────────────────────────────────────────────────
-  const [chatOpen,     setChatOpen]     = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [chatInput,    setChatInput]    = useState('');
-  const [chatLoading,  setChatLoading]  = useState(false);
-  const chatEndRef = React.useRef<HTMLDivElement>(null);
 
   // ── Feature State ─────────────────────────────────────────────────────────────
   const [presenterMode,    setPresenterMode]    = useState(false);
@@ -501,45 +492,11 @@ export default function SpendDashboard() {
     return lines.join('\n');
   }, [filterCategory, filterMarket, filterStatus, filterCategoryManager, filteredRows, metrics]);
 
-  // Auto-scroll chat
-  React.useEffect(() => {
-    if (chatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages, chatOpen]);
-
-  // ── Chat helpers ──────────────────────────────────────────────────────────────
-  async function sendMessageWith(question: string) {
-    setChatLoading(true);
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question, context: buildContext() }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
-      setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }]);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setChatMessages(prev => [...prev, { role: 'assistant', text: `Error: ${msg}` }]);
-    } finally {
-      setChatLoading(false);
-    }
-  }
-
-  async function sendMessage() {
-    const q = chatInput.trim();
-    if (!q || chatLoading) return;
-    setChatInput('');
-    setChatMessages(prev => [...prev, { role: 'user', text: q }]);
-    await sendMessageWith(q);
-  }
-
   // ── Conversational Drill-Down ─────────────────────────────────────────────────
+  // Dispatches a custom event picked up by the global AIChatAssistant.
   function drilldownSupplier(supplier: string) {
     const q = `Analyse ${supplier} in detail: current spend vs awarded budget, utilisation %, risk level, trend, and what the responsible category manager should do next.`;
-    setChatMessages(prev => [...prev, { role: 'user', text: q }]);
-    setChatOpen(true);
-    sendMessageWith(q);
+    window.dispatchEvent(new CustomEvent('ai-chat-ask', { detail: q }));
   }
 
   // ── Executive Brief ───────────────────────────────────────────────────────────
@@ -695,7 +652,7 @@ export default function SpendDashboard() {
             sub={savingsEur >= 0 ? 'Under budget — potential saving' : 'Over budget — action needed'}
             tone={savingsEur >= 0 ? 'positive' : 'danger'}
           />
-          <KpiCard label="Budget Utilization"  value={`${metrics.budgetUtilizationPct}%`}   sub="Actual vs contracted spend" tone={metrics.budgetUtilizationPct >= 90 ? 'danger' : metrics.budgetUtilizationPct >= 75 ? 'warning' : 'neutral'} />
+          <KpiCard label="Budget Utilisation"  value={`${metrics.budgetUtilizationPct}%`}   sub="Actual vs contracted spend" tone={metrics.budgetUtilizationPct >= 90 ? 'danger' : metrics.budgetUtilizationPct >= 75 ? 'warning' : 'neutral'} />
           <KpiCard label="Avg Adherence"        value={`${metrics.avgAdherencePct}%`}         sub="Actual vs awarded volume"  tone={metrics.avgAdherencePct >= 80 ? 'positive' : 'warning'} />
           <KpiCard
             label="At-Risk Contracts"
@@ -868,116 +825,6 @@ export default function SpendDashboard() {
         </div>
       )}
 
-      {/* ── AI Chat Button ──────────────────────────────────────────────── */}
-      <button onClick={() => setChatOpen(o => !o)} title="Ask AI about this data" style={{
-        position: 'fixed', bottom: 28, right: 28, zIndex: 1000,
-        width: 52, height: 52, borderRadius: '50%', background: '#067A46', border: 'none', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 4px 16px rgba(6,122,70,.35)', transition: 'transform 150ms, box-shadow 150ms',
-      }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.08)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)'; }}
-      >
-        {chatOpen ? (
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 3l12 12M15 3L3 15" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>
-        ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l4.93-1.37A9.953 9.953 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" fill="white"/>
-            <path d="M8 11h8M8 15h5" stroke="#067A46" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        )}
-        {chatMessages.length > 0 && !chatOpen && (
-          <span style={{ position: 'absolute', top: -2, right: -2, width: 16, height: 16, borderRadius: '50%', background: '#96DC14', border: '2px solid white' }} />
-        )}
-      </button>
-
-      {/* ── AI Chat Panel ──────────────────────────────────────────────── */}
-      {chatOpen && (
-        <div style={{
-          position: 'fixed', bottom: 92, right: 28, zIndex: 999,
-          width: 380, height: 520, borderRadius: 16,
-          background: '#fff', border: '1px solid #E4E4E4',
-          boxShadow: '0 8px 32px rgba(0,0,0,.12)',
-          display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-          <div style={{ background: '#067A46', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l4.93-1.37A9.953 9.953 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2z" fill="white"/></svg>
-            </div>
-            <div>
-              <div style={{ font: '600 14px/18px var(--font-body)', color: '#fff' }}>Ask about this data</div>
-              <div style={{ font: '400 11px/14px var(--font-body)', color: 'rgba(255,255,255,.7)' }}>
-                {filterCategory !== 'All' || filterMarket !== 'All' ? contextLabel : 'All categories · All markets'}
-              </div>
-            </div>
-            {chatMessages.length > 0 && (
-              <button onClick={() => setChatMessages([])} style={{ marginLeft: 'auto', background: 'transparent', border: 0, cursor: 'pointer', color: 'rgba(255,255,255,.6)', font: '400 11px var(--font-body)', padding: '4px 8px', borderRadius: 6 }}>Clear</button>
-            )}
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {chatMessages.length === 0 ? (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 16, padding: '0 8px' }}>
-                <div style={{ font: '400 13px/20px var(--font-body)', color: '#888', textAlign: 'center' }}>Ask anything about the spend data on screen, or click any supplier to drill down.</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-                  {['Which supplier is most over budget?', 'How many suppliers are at risk?', 'What is the spend split across markets?'].map(s => (
-                    <button key={s} onClick={() => setChatInput(s)} style={{ background: '#F4FAF6', border: '1px solid #C8E6D4', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', textAlign: 'left', font: '400 12px/18px var(--font-body)', color: '#067A46' }}>{s}</button>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              chatMessages.map((msg, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  <div style={{
-                    maxWidth: '85%', padding: '10px 14px',
-                    borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                    background: msg.role === 'user' ? '#067A46' : '#F4F4F4',
-                    color: msg.role === 'user' ? '#fff' : '#242424',
-                    font: '400 13px/20px var(--font-body)',
-                  }}>
-                    {msg.role === 'assistant' ? (
-                      <ReactMarkdown components={{
-                        p:      ({ children }) => <p style={{ margin: '0 0 6px' }}>{children}</p>,
-                        ul:     ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: 16 }}>{children}</ul>,
-                        ol:     ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: 16 }}>{children}</ol>,
-                        li:     ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
-                        strong: ({ children }) => <strong style={{ fontWeight: 600, color: '#067A46' }}>{children}</strong>,
-                        code:   ({ children }) => <code style={{ background: '#E8E8E8', padding: '1px 4px', borderRadius: 3, fontSize: 12 }}>{children}</code>,
-                      }}>{msg.text}</ReactMarkdown>
-                    ) : msg.text}
-                  </div>
-                </div>
-              ))
-            )}
-            {chatLoading && (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role === 'user') && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: '#F4F4F4' }}>
-                  <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[0, 1, 2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />)}
-                  </span>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          <div style={{ padding: '12px 14px', borderTop: '1px solid #EEE', flexShrink: 0, display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-            <textarea value={chatInput} onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Ask about spend, suppliers, risk…" rows={1}
-              style={{ flex: 1, resize: 'none', border: '1px solid #DDD', borderRadius: 10, padding: '9px 12px', font: '400 13px/20px var(--font-body)', color: '#242424', outline: 'none', background: '#FAFAFA', maxHeight: 100, overflowY: 'auto' }}
-            />
-            <button onClick={sendMessage} disabled={!chatInput.trim() || chatLoading} style={{
-              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-              background: chatInput.trim() && !chatLoading ? '#067A46' : '#E0E0E0',
-              border: 'none', cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'default',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 150ms',
-            }}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M9 3l5 5-5 5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

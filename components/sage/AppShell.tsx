@@ -1,5 +1,6 @@
 "use client";
 import { Sidebar } from "./Sidebar";
+import { AIChatAssistant } from "./AIChatAssistant";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -8,6 +9,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         {children}
       </div>
+      <AIChatAssistant />
     </div>
   );
 }

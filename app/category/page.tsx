@@ -550,7 +550,7 @@ export default function Page() {
         ),
       },
       {
-        metric: "Budget Util",
+        metric: "Budget Utilisation",
         ...Object.fromEntries(CATEGORIES.map((cat, i) => [cat, Math.round(cats[i].budgetUtilizationPct)])),
       },
       {

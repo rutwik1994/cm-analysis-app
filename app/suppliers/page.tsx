@@ -162,22 +162,22 @@ function StatusDefinitions({ progress }: { progress: { elapsedWeeks: number; tot
   const rows = [
     {
       label: "Critical",         icon: "🔴", bg: "#FEE2E2", color: "#991B1B",
-      rule: `util ≥ 100% or > ${p + 5}%`,
+      rule: `utilisation ≥ 100% or > ${p + 5}%`,
       meaning: `Already over budget, or running ahead of contract pace (${p}%) by more than 5 points. Immediate intervention.`,
     },
     {
       label: "At Risk",          icon: "⚠️", bg: "#FEF3C7", color: "#92400E",
-      rule: `${p - 5}% ≤ util < ${p + 5}%`,
+      rule: `${p - 5}% ≤ utilisation < ${p + 5}%`,
       meaning: `Tracking close to contract pace. Monitor weekly; flag to category manager if drifting upward.`,
     },
     {
       label: "On Track",         icon: "✅", bg: "#DCFCE7", color: "#166534",
-      rule: `${Math.max(p - 20, 0)}% ≤ util < ${p - 5}%`,
+      rule: `${Math.max(p - 20, 0)}% ≤ utilisation < ${p - 5}%`,
       meaning: `Healthy. Within a 20pp grace band below contract pace. No action needed.`,
     },
     {
       label: "Under-Delivering", icon: "📉", bg: "#F1F5F9", color: "#475569",
-      rule: `util < ${Math.max(p - 20, 0)}%`,
+      rule: `utilisation < ${Math.max(p - 20, 0)}%`,
       meaning: `More than 20 points behind pace. Either volumes are missing or we over-contracted — investigate root cause.`,
     },
   ];
@@ -216,7 +216,7 @@ function StatusDefinitions({ progress }: { progress: { elapsedWeeks: number; tot
             padding: "10px 14px", marginBottom: 14,
             font: "400 12px/18px var(--font-body)", color: "#374151",
           }}>
-            <strong style={{ color: "#067A46" }}>Why pacing-aware?</strong> A static "util ≥ 80% = at risk" rule mis-fires early in a contract (when low util is normal) and late (when 80% is actually under-pacing). We compare each supplier&apos;s utilisation to where the contract calendar says we should be.
+            <strong style={{ color: "#067A46" }}>Why pacing-aware?</strong> A static &quot;utilisation ≥ 80% = at risk&quot; rule mis-fires early in a contract (when low utilisation is normal) and late (when 80% is actually under-pacing). We compare each supplier&apos;s utilisation to where the contract calendar says we should be.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
             {rows.map((r) => (
@@ -365,7 +365,7 @@ function PerformanceMatrix({ suppliers }: { suppliers: SupplierRecord[] }) {
           <g key={s.supplier}>
             <circle cx={cx} cy={cy} r={6} fill={color} opacity={0.9} />
             <circle cx={cx} cy={cy} r={6} fill="none" stroke="#fff" strokeWidth={1.5} />
-            <title>{s.supplier} — {s.utilPct}% util, {s.adherencePct}% adherence</title>
+            <title>{s.supplier} — {s.utilPct}% utilisation, {s.adherencePct}% adherence</title>
             <text x={labelX + 8} y={labelY} fontSize={8.5} fill="#242424" fontWeight={600} style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3, strokeLinejoin: "round" }}>{shortName}</text>
           </g>
         );
@@ -630,7 +630,7 @@ export default function Page() {
                     Budget <SortIcon dir={sortKey === "awardedSpend" ? sortDir : null} />
                   </th>
                   <th style={thStyle("utilPct")} onClick={() => handleSort("utilPct")}>
-                    Util % <SortIcon dir={sortKey === "utilPct" ? sortDir : null} />
+                    Utilisation % <SortIcon dir={sortKey === "utilPct" ? sortDir : null} />
                   </th>
                   <th style={thStyle("adherencePct")} onClick={() => handleSort("adherencePct")}>
                     Adherence % <SortIcon dir={sortKey === "adherencePct" ? sortDir : null} />
@@ -754,10 +754,10 @@ export default function Page() {
             {/* Legend */}
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12, justifyContent: "center" }}>
               {[
-                { color: "#DCFCE7", label: "Star: high util + high adherence" },
-                { color: "#FEE2E2", label: "Watch: high util + low adherence" },
-                { color: "#FEF3C7", label: "Slack: low util + high adherence" },
-                { color: "#F1F5F9", label: "Underperformer: low util + low adherence" },
+                { color: "#DCFCE7", label: "Star: high utilisation + high adherence" },
+                { color: "#FEE2E2", label: "Watch: high utilisation + low adherence" },
+                { color: "#FEF3C7", label: "Slack: low utilisation + high adherence" },
+                { color: "#F1F5F9", label: "Underperformer: low utilisation + low adherence" },
               ].map((l) => (
                 <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 2, background: l.color, border: "1px solid #E4E4E4", display: "inline-block" }} />
@@ -786,7 +786,7 @@ export default function Page() {
         {/* ── Footnote ───────────────────────────────────────────────────── */}
         <div style={{ font: "400 11px/16px var(--font-body)", color: "#C4C4C4", textAlign: "center" }}>
           Utilisation = cumulative actual spend ÷ awarded budget · Adherence = avg across all contract weeks ·
-          Performance score: 100 base, −30 if util ≥ 90%, −15 if util ≥ 80%, −20 if util &lt; 30%, +up to 30 for adherence, −10/−5 for High/Medium budget risk
+          Performance score: 100 base, −30 if utilisation ≥ 90%, −15 if utilisation ≥ 80%, −20 if utilisation &lt; 30%, +up to 30 for adherence, −10/−5 for High/Medium budget risk
         </div>
 
       </div>

@@ -187,7 +187,7 @@ function CmSection({ name, suppliers, rows }: {
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         {[
           { label: "Portfolio Spend", value: fmt(metrics.totalActualSpendEur) },
-          { label: "Budget Util", value: `${metrics.budgetUtilizationPct}%` },
+          { label: "Budget Utilisation", value: `${metrics.budgetUtilizationPct}%` },
           { label: "At-Risk Suppliers", value: String(metrics.atRiskSuppliers) },
         ].map(k => (
           <div key={k.label} style={{ background: "#F8F8F8", borderRadius: 8, padding: "10px 16px", minWidth: 120 }}>
