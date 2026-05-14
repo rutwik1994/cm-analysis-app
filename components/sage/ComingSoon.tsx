@@ -1,5 +1,3 @@
-import React from "react";
-
 export function ComingSoon({ title, subtitle, breadcrumb }: {
   title: string;
   subtitle: string;

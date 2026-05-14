@@ -49,9 +49,6 @@ const fmtEur = (n: number) =>
     ? `€${(n / 1_000).toFixed(0)}k`
     : `€${n.toLocaleString()}`;
 
-const fmtEurFull = (n: number) =>
-  `€${n.toLocaleString("de-DE")}`;
-
 function pct(v: number) {
   return `${v.toFixed(1)}%`;
 }
@@ -994,11 +991,11 @@ export default function Page() {
             <div style={{ marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap" }}>
               {(
                 [
-                  { bg: "#DCFCE7", color: "#166534", label: "Best performer" },
-                  { bg: "#FEE2E2", color: "#991B1B", label: "Needs attention" },
-                  { bg: "#F8F8F8", color: "#374151", label: "Mid-range" },
+                  { bg: "#DCFCE7", label: "Best performer" },
+                  { bg: "#FEE2E2", label: "Needs attention" },
+                  { bg: "#F8F8F8", label: "Mid-range" },
                 ] as const
-              ).map(({ bg, color, label }) => (
+              ).map(({ bg, label }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <div
                     style={{
@@ -1123,7 +1120,7 @@ export default function Page() {
                           </div>
                         </div>
                       </td>
-                      {CATEGORIES.map((cat, ci) => {
+                      {CATEGORIES.map((cat) => {
                         const spend = spendByCatMarket[cat]?.[mkt] ?? 0;
                         const active = spend > 0;
                         return (

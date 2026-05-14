@@ -953,7 +953,7 @@ export default function SpendDashboard() {
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: '#F4F4F4' }}>
                   <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {[0, 0.2, 0.4].map((d, i) => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />)}
+                    {[0, 1, 2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />)}
                   </span>
                 </div>
               </div>

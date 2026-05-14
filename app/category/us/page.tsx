@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { ROWS, computeMetrics, computeSupplierSplit, SUPPLIER_COLOR, type SpendRow } from "@/lib/data";
 

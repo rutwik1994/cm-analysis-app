@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { ROWS, SUPPLIER_COLOR, computeSupplierSplit } from "@/lib/data";
+import { ROWS, SUPPLIER_COLOR } from "@/lib/data";
 import type { SpendRow } from "@/lib/data";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

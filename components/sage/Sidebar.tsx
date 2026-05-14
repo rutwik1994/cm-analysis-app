@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 type NavItem = { id: string; label: string; path: string; icon: string };
