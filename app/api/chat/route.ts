@@ -28,7 +28,7 @@ ${context}
 Question: ${question}`;
 
   const stream = await client.messages.stream({
-    model: "claude-3-5-haiku-latest",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
