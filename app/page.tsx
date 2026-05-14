@@ -515,14 +515,14 @@ export default function SpendDashboard() {
         body: JSON.stringify({ question: q, context: buildContext() }),
       });
 
-      if (!res.ok) throw new Error('Request failed');
-
       const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Request failed');
       if (!data.answer) throw new Error('No answer returned');
 
       setChatMessages(prev => [...prev, { role: 'assistant', text: data.answer }]);
-    } catch {
-      setChatMessages(prev => [...prev, { role: 'assistant', text: 'Sorry, something went wrong. Please try again.' }]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setChatMessages(prev => [...prev, { role: 'assistant', text: `Error: ${msg}` }]);
     } finally {
       setChatLoading(false);
     }
