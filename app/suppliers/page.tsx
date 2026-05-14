@@ -177,8 +177,16 @@ function PerformanceMatrix({ suppliers }: { suppliers: SupplierRecord[] }) {
   const xMid = toX(55);
   const yMid = toY(12.5);
 
+  // Stagger labels vertically to reduce overlap between dots at similar positions
+  const labelOffsets = new Map<string, number>();
+  const sortedForLabels = [...suppliers].sort((a, b) => toX(a.utilPct) - toX(b.utilPct));
+  sortedForLabels.forEach((s, i) => {
+    // Alternate label positions: above, below, above, below to spread overlapping labels
+    labelOffsets.set(s.supplier, i % 2 === 0 ? -10 : 14);
+  });
+
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: "visible" }}>
+    <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ overflow: "hidden", display: "block" }}>
       {/* Quadrant backgrounds */}
       <rect x={PAD.left} y={PAD.top} width={xMid - PAD.left} height={yMid - PAD.top} fill="#FEF3C7" opacity={0.35} />
       <rect x={xMid} y={PAD.top} width={W - PAD.right - xMid} height={yMid - PAD.top} fill="#DCFCE7" opacity={0.35} />
@@ -218,12 +226,18 @@ function PerformanceMatrix({ suppliers }: { suppliers: SupplierRecord[] }) {
         const cx = toX(s.utilPct);
         const cy = toY(s.adherencePct);
         const color = SUPPLIER_COLOR[s.supplier] ?? "#067A46";
-        const shortName = s.supplier.length > 18 ? s.supplier.slice(0, 16) + "…" : s.supplier;
+        const shortName = s.supplier.length > 14 ? s.supplier.slice(0, 12) + "…" : s.supplier;
+        const labelDy = labelOffsets.get(s.supplier) ?? -10;
+        // Clamp label X so it doesn't overflow the right edge
+        const labelX = Math.min(cx, W - PAD.right - shortName.length * 4.2);
+        // Clamp label Y so it stays inside the plot bounds
+        const labelY = Math.max(PAD.top + 8, Math.min(H - PAD.bottom - 2, cy + labelDy));
         return (
           <g key={s.supplier}>
-            <circle cx={cx} cy={cy} r={7} fill={color} opacity={0.9} />
-            <circle cx={cx} cy={cy} r={7} fill="none" stroke="#fff" strokeWidth={1.5} />
-            <text x={cx + 10} y={cy + 4} fontSize={8.5} fill="#242424" fontWeight={600}>{shortName}</text>
+            <circle cx={cx} cy={cy} r={6} fill={color} opacity={0.9} />
+            <circle cx={cx} cy={cy} r={6} fill="none" stroke="#fff" strokeWidth={1.5} />
+            <title>{s.supplier} — {s.utilPct}% util, {s.adherencePct}% adherence</title>
+            <text x={labelX + 8} y={labelY} fontSize={8.5} fill="#242424" fontWeight={600} style={{ paintOrder: "stroke", stroke: "#fff", strokeWidth: 3, strokeLinejoin: "round" }}>{shortName}</text>
           </g>
         );
       })}
