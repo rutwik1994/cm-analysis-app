@@ -8,6 +8,38 @@ import type { SpendRow } from "@/lib/data";
 const fmtEur = (n: number) => `€${n.toLocaleString("de-DE")}`;
 const fmtK   = (n: number) => n >= 1_000_000 ? `€${(n / 1_000_000).toFixed(2)}M` : n >= 1000 ? `€${(n / 1000).toFixed(1)}k` : `€${n}`;
 
+// ── Contract pacing — derive elapsed % from data ──────────────────────────────
+// Contract: 2025-W24 → 2026-W23 = 52 weeks. We compute progress from the latest
+// Historical week present in ROWS so the dashboard adapts as data is refreshed.
+function computeContractProgress(rows: SpendRow[]): { elapsedWeeks: number; totalWeeks: number; progressPct: number } {
+  const TOTAL = 52;
+  const histWeeks = rows.filter(r => r.actualsStatus === "Historical").map(r => r.contractWeek);
+  const latest = [...new Set(histWeeks)].sort().pop() ?? "2026-W19";
+  const [yrStr, wStr] = latest.split("-W");
+  const yr = parseInt(yrStr), w = parseInt(wStr);
+  // W24/2025 → end-of-2025 = 29 weeks. W01/2026 onward adds w more weeks.
+  const elapsed = yr === 2025 ? w - 24 + 1 : 29 + w;
+  return { elapsedWeeks: elapsed, totalWeeks: TOTAL, progressPct: Math.round((elapsed / TOTAL) * 100) };
+}
+
+// ── Pacing-aware status thresholds ────────────────────────────────────────────
+// Compares actual utilisation against expected utilisation given how far we are
+// through the contract — so a supplier at 50% util in W5 isn't "under-delivering"
+// (we'd only expect ~10% util at that point), and a supplier at 50% in W50 truly is.
+function classifyStatus(utilPct: number, progressPct: number): "critical" | "at-risk" | "on-track" | "under-delivering" {
+  const expected = progressPct;
+  // Over-budget always wins
+  if (utilPct >= 100) return "critical";
+  // Running hot — ahead of contract pace by 5+ points
+  if (utilPct >= expected + 5) return "critical";
+  // Ahead of pace but within ceiling — flag for monitoring
+  if (utilPct >= expected - 5) return "at-risk";
+  // Within a 20pp grace band behind pace — healthy
+  if (utilPct >= expected - 20) return "on-track";
+  // Significantly behind — supplier or category manager action needed
+  return "under-delivering";
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface SupplierRecord {
   supplier: string;
@@ -24,7 +56,7 @@ interface SupplierRecord {
 }
 
 // ── Derive supplier records from ROWS ─────────────────────────────────────────
-function buildSupplierRecords(rows: SpendRow[]): SupplierRecord[] {
+function buildSupplierRecords(rows: SpendRow[], progressPct: number): SupplierRecord[] {
   const map = new Map<
     string,
     {
@@ -81,11 +113,7 @@ function buildSupplierRecords(rows: SpendRow[]): SupplierRecord[] {
     else if (d.budgetRisk === "Medium") score -= 5;
     score = Math.max(0, Math.min(100, score));
 
-    const status: SupplierRecord["status"] =
-      utilPct >= 90 ? "critical"
-      : utilPct >= 80 ? "at-risk"
-      : utilPct < 40 ? "under-delivering"
-      : "on-track";
+    const status: SupplierRecord["status"] = classifyStatus(utilPct, progressPct);
 
     return {
       supplier: d.supplier,
@@ -123,6 +151,107 @@ function StatusBadge({ status }: { status: SupplierRecord["status"] }) {
       <span style={{ fontSize: 10 }}>{c.icon}</span>
       {c.label}
     </span>
+  );
+}
+
+// ── Status Definitions Panel ──────────────────────────────────────────────────
+// Collapsible card explaining the pacing-aware status logic in plain English.
+function StatusDefinitions({ progress }: { progress: { elapsedWeeks: number; totalWeeks: number; progressPct: number } }) {
+  const [open, setOpen] = useState(false);
+  const p = progress.progressPct;
+  const rows = [
+    {
+      label: "Critical",         icon: "🔴", bg: "#FEE2E2", color: "#991B1B",
+      rule: `util ≥ 100% or > ${p + 5}%`,
+      meaning: `Already over budget, or running ahead of contract pace (${p}%) by more than 5 points. Immediate intervention.`,
+    },
+    {
+      label: "At Risk",          icon: "⚠️", bg: "#FEF3C7", color: "#92400E",
+      rule: `${p - 5}% ≤ util < ${p + 5}%`,
+      meaning: `Tracking close to contract pace. Monitor weekly; flag to category manager if drifting upward.`,
+    },
+    {
+      label: "On Track",         icon: "✅", bg: "#DCFCE7", color: "#166534",
+      rule: `${Math.max(p - 20, 0)}% ≤ util < ${p - 5}%`,
+      meaning: `Healthy. Within a 20pp grace band below contract pace. No action needed.`,
+    },
+    {
+      label: "Under-Delivering", icon: "📉", bg: "#F1F5F9", color: "#475569",
+      rule: `util < ${Math.max(p - 20, 0)}%`,
+      meaning: `More than 20 points behind pace. Either volumes are missing or we over-contracted — investigate root cause.`,
+    },
+  ];
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 10, border: "1px solid #E4E4E4",
+      marginBottom: 20, boxShadow: "0 1px 3px rgba(36,36,36,.06)", overflow: "hidden",
+    }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", padding: "14px 18px", background: "transparent", border: "none",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", textAlign: "left" as const,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 16 }}>ℹ️</span>
+          <div>
+            <div style={{ font: "600 13px/18px var(--font-body)", color: "#242424" }}>
+              How are statuses defined?
+            </div>
+            <div style={{ font: "400 11px/16px var(--font-body)", color: "#676767", marginTop: 1 }}>
+              Pacing-aware — compares utilisation against contract progress (currently <strong style={{ color: "#067A46" }}>W{progress.elapsedWeeks} of {progress.totalWeeks} · {p}% elapsed</strong>)
+            </div>
+          </div>
+        </div>
+        <span style={{ font: "600 12px/16px var(--font-body)", color: "#067A46" }}>
+          {open ? "Hide ▴" : "Show ▾"}
+        </span>
+      </button>
+      {open && (
+        <div style={{ borderTop: "1px solid #F0F0F0", padding: "14px 18px 18px" }}>
+          <div style={{
+            background: "#F8FAF8", border: "1px solid #E4E4E4", borderRadius: 8,
+            padding: "10px 14px", marginBottom: 14,
+            font: "400 12px/18px var(--font-body)", color: "#374151",
+          }}>
+            <strong style={{ color: "#067A46" }}>Why pacing-aware?</strong> A static "util ≥ 80% = at risk" rule mis-fires early in a contract (when low util is normal) and late (when 80% is actually under-pacing). We compare each supplier&apos;s utilisation to where the contract calendar says we should be.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+            {rows.map((r) => (
+              <div key={r.label} style={{
+                background: r.bg, borderRadius: 8, padding: "10px 12px",
+                border: `1px solid ${r.color}33`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12 }}>{r.icon}</span>
+                  <span style={{ font: "700 12px/16px var(--font-body)", color: r.color }}>{r.label}</span>
+                  <code style={{
+                    marginLeft: "auto",
+                    font: "500 10px/14px var(--font-mono)",
+                    color: r.color, opacity: 0.85,
+                    background: "#fff",
+                    padding: "2px 6px", borderRadius: 4,
+                    border: `1px solid ${r.color}22`,
+                  }}>{r.rule}</code>
+                </div>
+                <div style={{ font: "400 11px/16px var(--font-body)", color: r.color }}>
+                  {r.meaning}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{
+            marginTop: 14, padding: "10px 14px", borderRadius: 8,
+            background: "#FAFAFA", border: "1px solid #E4E4E4",
+            font: "400 11px/17px var(--font-body)", color: "#676767",
+          }}>
+            <strong style={{ color: "#374151" }}>Performance Score (0–100):</strong> separate composite blending utilisation penalties, adherence bonus (up to +30 for delivering volumes), and budget-risk deductions. Clamped to [0, 100]. Sortable column in the scorecard below.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -299,7 +428,8 @@ function CatManagerSummary({ suppliers }: { suppliers: SupplierRecord[] }) {
 type SortKey = keyof Pick<SupplierRecord, "supplier" | "category" | "market" | "actualSpend" | "awardedSpend" | "utilPct" | "adherencePct" | "performanceScore">;
 
 export default function Page() {
-  const allSuppliers = useMemo(() => buildSupplierRecords(ROWS), []);
+  const contractProgress = useMemo(() => computeContractProgress(ROWS), []);
+  const allSuppliers     = useMemo(() => buildSupplierRecords(ROWS, contractProgress.progressPct), [contractProgress.progressPct]);
 
   // Filters
   const categories = useMemo(() => ["All", ...Array.from(new Set(allSuppliers.map((s) => s.category))).sort()], [allSuppliers]);
@@ -408,12 +538,12 @@ export default function Page() {
         </div>
 
         {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
           {[
-            { label: "Total Suppliers",    value: String(kpis.total),           sub: "across all categories", tone: "neutral"   },
-            { label: "At Risk",            value: String(kpis.atRisk),          sub: "Utilisation ≥ 80%",    tone: kpis.atRisk > 0 ? "warning" : "neutral" },
-            { label: "Critical",           value: String(kpis.critical),        sub: "Utilisation ≥ 90%",    tone: kpis.critical > 0 ? "danger"  : "neutral" },
-            { label: "Under-Delivering",   value: String(kpis.underDelivering), sub: "Utilisation < 40%",    tone: "neutral"   },
+            { label: "Total Suppliers",    value: String(kpis.total),           sub: "across all categories",                          tone: "neutral"   },
+            { label: "At Risk",            value: String(kpis.atRisk),          sub: `Within ±5pp of pace (${contractProgress.progressPct}%)`, tone: kpis.atRisk > 0 ? "warning" : "neutral" },
+            { label: "Critical",           value: String(kpis.critical),        sub: "Over budget or > pace + 5pp",                    tone: kpis.critical > 0 ? "danger"  : "neutral" },
+            { label: "Under-Delivering",   value: String(kpis.underDelivering), sub: "More than 20pp behind pace",                     tone: "neutral"   },
           ].map((k) => {
             const borderColor = k.tone === "danger" ? "#FCA5A5" : k.tone === "warning" ? "#FCD34D" : "#E4E4E4";
             const subColor    = k.tone === "danger" ? "#B30000" : k.tone === "warning" ? "#A43700" : "#676767";
@@ -430,6 +560,9 @@ export default function Page() {
             );
           })}
         </div>
+
+        {/* ── Status Definitions Panel ───────────────────────────────────── */}
+        <StatusDefinitions progress={contractProgress} />
 
         {/* ── Filter Bar ─────────────────────────────────────────────────── */}
         <div style={{
