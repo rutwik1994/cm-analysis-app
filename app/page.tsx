@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Cell, Brush,
@@ -906,15 +907,27 @@ export default function SpendDashboard() {
                     background: msg.role === 'user' ? '#067A46' : '#F4F4F4',
                     color: msg.role === 'user' ? '#fff' : '#242424',
                     font: '400 13px/20px var(--font-body)',
-                    whiteSpace: 'pre-wrap',
                   }}>
-                    {msg.text || (chatLoading && i === chatMessages.length - 1 ? (
+                    {chatLoading && i === chatMessages.length - 1 && !msg.text ? (
                       <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', animation: 'pulse 1s infinite' }} />
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', animation: 'pulse 1s infinite .2s' }} />
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#BBB', animation: 'pulse 1s infinite .4s' }} />
                       </span>
-                    ) : '')}
+                    ) : msg.role === 'assistant' ? (
+                      <ReactMarkdown components={{
+                        p:      ({ children }) => <p style={{ margin: '0 0 6px' }}>{children}</p>,
+                        ul:     ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: 16 }}>{children}</ul>,
+                        ol:     ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: 16 }}>{children}</ol>,
+                        li:     ({ children }) => <li style={{ marginBottom: 2 }}>{children}</li>,
+                        strong: ({ children }) => <strong style={{ fontWeight: 600, color: '#067A46' }}>{children}</strong>,
+                        code:   ({ children }) => <code style={{ background: '#E8E8E8', padding: '1px 4px', borderRadius: 3, fontSize: 12 }}>{children}</code>,
+                      }}>
+                        {msg.text}
+                      </ReactMarkdown>
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 </div>
               ))
