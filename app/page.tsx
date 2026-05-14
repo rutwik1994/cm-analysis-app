@@ -489,9 +489,9 @@ export default function SpendDashboard() {
       lines.push(`- ${s.supplier}: €${s.actualEur.toLocaleString('de-DE')} actual / €${s.awardedEur.toLocaleString('de-DE')} awarded (${util}% utilisation, ${s.pct.toFixed(1)}% of total spend)`);
     });
     lines.push('');
-    lines.push(`## Sample Contract Rows (up to 20)`);
+    lines.push(`## Contract Rows (up to 80, sorted by supplier)`);
     lines.push(`Supplier | Category | Market | SKU | Ingredient | Actual Spend | Awarded | vs Budget% | Status | Category Manager`);
-    filteredRows.slice(0, 20).forEach(r => {
+    filteredRows.slice(0, 80).forEach(r => {
       lines.push(`${r.supplier} | ${r.category} | ${r.market} | ${r.skuName} | ${r.globalIngredient} | €${r.cumulativeActualSpendEur.toLocaleString()} | €${r.cumulativeAwardedSpendEur.toLocaleString()} | ${r.spendDiffPct.toFixed(1)}% | ${r.actualsStatus} | ${r.categoryManager}`);
     });
     return lines.join('\n');
