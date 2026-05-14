@@ -1,13 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   const { question, context } = await req.json();
 
   if (!question?.trim()) {
-    return new Response(JSON.stringify({ error: "No question provided" }), { status: 400 });
+    return NextResponse.json({ error: "No question provided" }, { status: 400 });
   }
 
   const systemPrompt = `You are a procurement analytics assistant for HelloFresh Strategic Procurement.
@@ -27,29 +29,17 @@ ${context}
 
 Question: ${question}`;
 
-  const stream = await client.messages.stream({
+  const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      for await (const chunk of stream) {
-        if (
-          chunk.type === "content_block_delta" &&
-          chunk.delta.type === "text_delta"
-        ) {
-          controller.enqueue(encoder.encode(chunk.delta.text));
-        }
-      }
-      controller.close();
-    },
-  });
+  const text = message.content
+    .filter((b) => b.type === "text")
+    .map((b) => (b as { type: "text"; text: string }).text)
+    .join("");
 
-  return new Response(readable, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+  return NextResponse.json({ answer: text });
 }
