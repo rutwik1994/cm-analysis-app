@@ -81,16 +81,16 @@ export default function LoginPage() {
         background: '#fff', borderRadius: 16, padding: '48px 40px', width: 400,
         boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
       }}>
-        {/* Logo */}
+        {/* Logo — matches the sidebar brand post-login */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10, background: '#96DC14',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#035624', fontWeight: 700, fontSize: 18,
-          }}>S</div>
+          }}>P</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#242424' }}>SAGE</div>
-            <div style={{ fontSize: 12, color: '#676767' }}>Strategic Procurement</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#242424' }}>Procurement Analytics</div>
+            <div style={{ fontSize: 12, color: '#676767' }}>Category Management</div>
           </div>
         </div>
 

@@ -3,8 +3,8 @@ import { AppShell } from "@/components/sage/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Spend Analysis | SAGE Procurement",
-  description: "HelloFresh Strategic Procurement — Spend Analysis Dashboard",
+  title: "Procurement Analytics | HelloFresh",
+  description: "HelloFresh Strategic Procurement — Category Management Dashboard",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
