@@ -7,25 +7,26 @@ type NavGroup = { id: string; label: string; defaultOpen?: boolean; items: NavIt
 
 const GROUPS: NavGroup[] = [
   {
+    id: 'purchaseorders', label: 'Purchase Orders', defaultOpen: true, items: [
+      { id: 'catoverview', label: 'Category Spend Overview',  path: '/category',        icon: '📦' },
+      { id: 'posummary',   label: 'Purchase Summary',         path: '/purchase-orders', icon: '🛒' },
+    ],
+  },
+  {
     id: 'procurement', label: 'Strategic Procurement', defaultOpen: true, items: [
-      { id: 'spend',     label: 'Spend Analysis',    path: '/',          icon: '₣' },
-      { id: 'suppliers', label: 'Supplier Tracker',  path: '/suppliers', icon: '🏭' },
-      { id: 'contracts', label: 'Contract Monitor',  path: '/contracts', icon: '📋' },
-      { id: 'budget',    label: 'Budget Forecast',   path: '/budget',    icon: '📊' },
+      { id: 'spend',        label: 'Spend Analysis',   path: '/',              icon: '₣' },
+      { id: 'suppliers',    label: 'Supplier Tracker', path: '/suppliers',     icon: '🏭' },
+      { id: 'topsuppliers', label: 'Top Suppliers',    path: '/top-suppliers', icon: '🏆' },
+      { id: 'contracts',    label: 'Contract Monitor', path: '/contracts',     icon: '📋' },
+      { id: 'budget',       label: 'Budget Forecast',  path: '/budget',        icon: '📊' },
     ],
   },
   {
     id: 'category', label: 'Category Management', items: [
-      { id: 'catoverview', label: 'Overview',   path: '/category',         icon: '◉' },
-      { id: 'catdach',     label: 'DACH',       path: '/category/dach',    icon: '🇩🇪' },
-      { id: 'catus',       label: 'US',         path: '/category/us',      icon: '🇺🇸' },
-      { id: 'catdkse',     label: 'DKSE',       path: '/category/dkse',    icon: '🇩🇰' },
-      { id: 'catbenelux',  label: 'BENELUX',    path: '/category/benelux', icon: '🇧🇪' },
-    ],
-  },
-  {
-    id: 'workspace', label: 'My Workspace', items: [
-      { id: 'reports', label: 'Reports', path: '/reports', icon: '📄' },
+      { id: 'catdach',    label: 'DACH',    path: '/category/dach',    icon: '🇩🇪' },
+      { id: 'catus',      label: 'US',      path: '/category/us',      icon: '🇺🇸' },
+      { id: 'catdkse',    label: 'DKSE',    path: '/category/dkse',    icon: '🇩🇰' },
+      { id: 'catbenelux', label: 'BENELUX', path: '/category/benelux', icon: '🇧🇪' },
     ],
   },
 ];
@@ -147,16 +148,17 @@ export function Sidebar() {
           <div style={{ font: '600 12px/16px var(--font-body)', color: C.fg }}>Rutwik Godse</div>
           <div style={{ font: '400 11px/14px var(--font-body)', color: C.muted }}>Strategic Procurement</div>
         </div>
-        <form action="/api/logout" method="POST">
-          <button type="submit" title="Sign out" style={{
+        <button
+          title="Sign out"
+          onClick={() => router.push('/api/logout')}
+          style={{
             background: 'transparent', border: 0, cursor: 'pointer',
             color: C.muted, padding: 4, borderRadius: 4, display: 'flex',
           }}>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M10 3h3a1 1 0 011 1v8a1 1 0 01-1 1h-3M7 11l3-3-3-3M10 8H2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </form>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M10 3h3a1 1 0 011 1v8a1 1 0 01-1 1h-3M7 11l3-3-3-3M10 8H2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
     </aside>
   );

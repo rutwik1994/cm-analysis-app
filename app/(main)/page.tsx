@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -8,9 +8,11 @@ import {
 import {
   ROWS, CATEGORIES, MARKETS, CATEGORY_MANAGERS,
   computeMetrics, computeSupplierSplit, computeWeeklyChart,
+  computeWeeklyChartByMarket, aggregateTimeSeries, computeSkuQoQ,
   supplierKey, SUPPLIER_COLOR,
-  type SpendRow,
+  type SpendRow, type TimeAggregation,
 } from "@/lib/data";
+import { SUBCATS_BY_CATEGORY, SUBCAT_TO_MANAGER } from "@/lib/category-managers";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt     = (n: number) => n >= 1000 ? `€${(n / 1000).toFixed(1)}k` : `€${n.toLocaleString()}`;
@@ -27,12 +29,19 @@ const MARKET_CHIP: Record<string, { bg: string; color: string }> = {
   US:      { bg: '#EFF6FF', color: '#1E40AF' },
   DKSE:    { bg: '#FDF4FF', color: '#7E22CE' },
   BENELUX: { bg: '#FFF7ED', color: '#9A3412' },
+  FR:      { bg: '#FAF0FF', color: '#6A1B9A' },
+  GB:      { bg: '#FFF5F5', color: '#C62828' },
+  AU:      { bg: '#F0FDFC', color: '#00838F' },
+  NZ:      { bg: '#F3FAF0', color: '#558B2F' },
+  IE:      { bg: '#F5F5F5', color: '#37474F' },
+  CA:      { bg: '#E8F4FD', color: '#0277BD' },
 };
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, tone }: {
+function KpiCard({ label, value, sub, tone, tip }: {
   label: string; value: string; sub?: string;
   tone?: 'positive' | 'warning' | 'danger' | 'neutral';
+  tip?: string;
 }) {
   const subColor = tone === 'positive' ? '#067A46' : tone === 'warning' ? '#A43700' : tone === 'danger' ? '#B30000' : '#676767';
   return (
@@ -41,8 +50,9 @@ function KpiCard({ label, value, sub, tone }: {
       border: `1px solid ${tone === 'danger' ? '#FCA5A5' : tone === 'warning' ? '#FCD34D' : '#E4E4E4'}`,
       boxShadow: '0 1px 3px rgba(36,36,36,.06)',
     }}>
-      <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+      <div style={{ font: '400 12px/16px var(--font-body)', color: '#676767', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em', display: 'flex', alignItems: 'center' }}>
         {label}
+        {tip && <InfoTip text={tip} />}
       </div>
       <div style={{ font: '700 24px/30px var(--font-display)', color: '#242424' }}>{value}</div>
       {sub && <div style={{ font: '400 12px/16px var(--font-body)', color: subColor, marginTop: 4 }}>{sub}</div>}
@@ -154,9 +164,10 @@ function InfoTip({ text }: { text: string }) {
       {pos && (
         <span style={{
           position: 'fixed', left: pos.x, top: pos.y, transform: 'translate(-50%, -100%)',
-          background: '#242424', color: '#fff', font: '400 12px/16px var(--font-body)', padding: '6px 10px',
-          borderRadius: 6, whiteSpace: 'nowrap', zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,.25)',
-          pointerEvents: 'none', maxWidth: 280, textAlign: 'left' as const,
+          background: '#242424', color: '#fff', font: '400 12px/17px var(--font-body)', padding: '8px 12px',
+          borderRadius: 6, zIndex: 9999, boxShadow: '0 4px 12px rgba(0,0,0,.25)',
+          pointerEvents: 'none', width: 280, whiteSpace: 'normal',
+          textAlign: 'left' as const, textTransform: 'none' as const, letterSpacing: 0,
         }}>
           {text}
           <span style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderTop: '5px solid #242424' }} />
@@ -306,6 +317,85 @@ function DataTable({ rows }: { rows: SpendRow[] }) {
   );
 }
 
+// ── Multi-select filter (#13 quick win) ──────────────────────────────────────
+function MultiSelectFilter({ label, options, values, onChange }: {
+  label: string; options: string[]; values: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const active = values.length > 0;
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  const summary = values.length === 0 ? `All ${pluralise(label)}`
+                : values.length === 1 ? values[0]
+                : `${values.length} ${pluralise(label.toLowerCase())}`;
+  return (
+    <div ref={ref} style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, position: 'relative' }}>
+      <label style={{ font: '500 11px/14px var(--font-body)', color: '#676767', letterSpacing: '.03em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</label>
+      <button onClick={() => setOpen(o => !o)} style={{
+        padding: '7px 28px 7px 10px', borderRadius: 7, border: `1.5px solid ${active ? '#067A46' : '#E4E4E4'}`,
+        background: active ? '#F6FDE9' : '#fff', color: active ? '#067A46' : '#242424',
+        font: `${active ? 600 : 400} 13px/18px var(--font-body)`, cursor: 'pointer', outline: 'none',
+        textAlign: 'left', position: 'relative',
+        minWidth: 130, maxWidth: 220, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {summary}
+        <svg width="10" height="6" viewBox="0 0 10 6" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)' }}>
+          <path d="M1 1l4 4 4-4" stroke="#676767" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        </svg>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50,
+          background: '#fff', border: '1px solid #E4E4E4', borderRadius: 8,
+          boxShadow: '0 8px 20px rgba(0,0,0,.12)', minWidth: 180, maxHeight: 280, overflowY: 'auto',
+        }}>
+          <div onClick={() => onChange([])} style={{
+            padding: '8px 12px', cursor: 'pointer', font: '500 12px/16px var(--font-body)',
+            color: values.length === 0 ? '#067A46' : '#676767', borderBottom: '1px solid #F0F0F0',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${values.length === 0 ? '#067A46' : '#D4D4D4'}`,
+              background: values.length === 0 ? '#067A46' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {values.length === 0 && <svg width="8" height="8" viewBox="0 0 10 8"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>}
+            </span>
+            All {pluralise(label)}
+          </div>
+          {options.map(opt => {
+            const checked = values.includes(opt);
+            return (
+              <div key={opt} onClick={() => onChange(checked ? values.filter(v => v !== opt) : [...values, opt])}
+                style={{
+                  padding: '8px 12px', cursor: 'pointer', font: '400 12px/16px var(--font-body)',
+                  color: '#242424', display: 'flex', alignItems: 'center', gap: 8,
+                  background: checked ? '#F6FDE9' : 'transparent',
+                }}>
+                <span style={{ width: 14, height: 14, borderRadius: 3, border: `1.5px solid ${checked ? '#067A46' : '#D4D4D4'}`,
+                  background: checked ? '#067A46' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {checked && <svg width="8" height="8" viewBox="0 0 10 8"><path d="M1 4l3 3 5-6" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>}
+                </span>
+                {opt}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pluralise label correctly (Category→Categories, Status→Statuses, Market→Markets) ──
+function pluralise(label: string): string {
+  if (label.endsWith('y'))  return label.slice(0, -1) + 'ies'; // Category → Categories
+  if (label.endsWith('s'))  return label + 'es';                // Status → Statuses
+  return label + 's';
+}
+
 // ── Filter dropdown ───────────────────────────────────────────────────────────
 function FilterSelect({ label, options, value, onChange }: {
   label: string; options: string[]; value: string; onChange: (v: string) => void;
@@ -323,7 +413,7 @@ function FilterSelect({ label, options, value, onChange }: {
         backgroundRepeat: 'no-repeat', backgroundPosition: 'right 9px center',
         minWidth: 110, maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>
-        {options.map(opt => <option key={opt} value={opt}>{opt === 'All' ? `All ${label}s` : opt}</option>)}
+        {options.map(opt => <option key={opt} value={opt}>{opt === 'All' ? `All ${pluralise(label)}` : opt}</option>)}
       </select>
     </div>
   );
@@ -331,48 +421,88 @@ function FilterSelect({ label, options, value, onChange }: {
 
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function SpendDashboard() {
+  // ── Live data from Databricks (falls back to static if not configured) ────────
+  const [allRows,      setAllRows]      = useState<SpendRow[]>(ROWS);
+  const [dataSource,   setDataSource]   = useState<'loading' | 'databricks' | 'static'>('loading');
+
+  useEffect(() => {
+    fetch('/api/spend-data')
+      .then(res => {
+        const src = res.headers.get('X-Data-Source');
+        return res.json().then((payload: { rows: SpendRow[]; supplierTotals?: unknown }) => ({ data: payload.rows ?? (payload as unknown as SpendRow[]), src }));
+      })
+      .then(({ data, src }) => {
+        setAllRows(data);
+        setDataSource(src === 'databricks' ? 'databricks' : 'static');
+      })
+      .catch(() => {
+        setAllRows(ROWS);
+        setDataSource('static');
+      });
+  }, []);
+
   // ── Filters ──────────────────────────────────────────────────────────────────
   const [filterCategory,        setFilterCategory]        = useState<string>('All');
-  const [filterMarket,          setFilterMarket]          = useState<string>('All');
+  const [filterMarkets,         setFilterMarkets]         = useState<string[]>([]); // [] = All
   const [filterStatus,          setFilterStatus]          = useState<'All' | 'Historical' | 'Forecast'>('All');
   const [filterCategoryManager, setFilterCategoryManager] = useState<string>('All');
+  const [filterSubCategory,     setFilterSubCategory]     = useState<string[]>([]); // [] = All
   const [search,                setSearch]                = useState('');
 
   // ── Feature State ─────────────────────────────────────────────────────────────
-  const [presenterMode,    setPresenterMode]    = useState(false);
+  const [presenterMode,    setPresenterMode]    = useState(false); // kept for compat, always false
   const [showBrief,        setShowBrief]        = useState(false);
   const [brief,            setBrief]            = useState('');
   const [briefLoading,     setBriefLoading]     = useState(false);
   const [anomalyDismissed, setAnomalyDismissed] = useState(true);
   const [showYoY,          setShowYoY]          = useState(false);
+  // Quick-win features
+  const [chartMode,        setChartMode]        = useState<'supplier' | 'market'>('supplier');
+  const [timeAggregation,  setTimeAggregation]  = useState<'week' | 'month' | 'quarter'>('week');
 
   // ── Filtered Data ─────────────────────────────────────────────────────────────
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return ROWS.filter(r => {
+    return allRows.filter(r => {
       if (filterCategory        !== 'All' && r.category        !== filterCategory)        return false;
-      if (filterMarket          !== 'All' && r.market          !== filterMarket)          return false;
+      if (filterMarkets.length  > 0     && !filterMarkets.includes(r.market))             return false;
       if (filterStatus          !== 'All' && r.actualsStatus   !== filterStatus)          return false;
       if (filterCategoryManager !== 'All' && r.categoryManager !== filterCategoryManager) return false;
+      if (filterSubCategory.length > 0  && !filterSubCategory.includes(r.subCategory ?? '')) return false;
       if (!q) return true;
       return (
-        r.supplier.toLowerCase().includes(q)         ||
-        r.skuName.toLowerCase().includes(q)          ||
-        r.skuCode.toLowerCase().includes(q)          ||
-        r.globalIngredient.toLowerCase().includes(q) ||
-        r.contractWeek.toLowerCase().includes(q)     ||
-        r.market.toLowerCase().includes(q)           ||
-        r.category.toLowerCase().includes(q)         ||
-        r.budgetRisk.toLowerCase().includes(q)       ||
+        r.supplier.toLowerCase().includes(q)                   ||
+        r.skuName.toLowerCase().includes(q)                    ||
+        r.skuCode.toLowerCase().includes(q)                    ||
+        r.globalIngredient.toLowerCase().includes(q)           ||
+        r.contractWeek.toLowerCase().includes(q)               ||
+        r.market.toLowerCase().includes(q)                     ||
+        r.category.toLowerCase().includes(q)                   ||
+        (r.subCategory ?? '').toLowerCase().includes(q)        ||
+        r.budgetRisk.toLowerCase().includes(q)                 ||
         r.categoryManager.toLowerCase().includes(q)
       );
     });
-  }, [filterCategory, filterMarket, filterStatus, filterCategoryManager, search]);
+  }, [allRows, filterCategory, filterMarkets, filterStatus, filterCategoryManager, filterSubCategory, search]);
+
+  // Derive filter options from live data so they stay in sync with Databricks
+  const liveCategories = useMemo(() => [...new Set(allRows.map(r => r.category))].sort(), [allRows]);
+  const liveMarkets    = useMemo(() => [...new Set(allRows.map(r => r.market))].sort(),    [allRows]);
 
   const metrics       = useMemo(() => computeMetrics(filteredRows),      [filteredRows]);
   const supplierSplit = useMemo(() => computeSupplierSplit(filteredRows), [filteredRows]);
-  const weeklyRaw     = useMemo(() => computeWeeklyChart(filteredRows),  [filteredRows]);
-  const chartData     = useMemo(() => weeklyRaw.filter(w => w.total > 0 || w.isForecast), [weeklyRaw]);
+  const skuQoQ        = useMemo(() => computeSkuQoQ(filteredRows),        [filteredRows]);
+  // Choose chart computation by mode, then optionally roll up by period
+  const weeklyRaw     = useMemo(
+    () => chartMode === 'market'
+      ? computeWeeklyChartByMarket(filteredRows)
+      : computeWeeklyChart(filteredRows),
+    [filteredRows, chartMode],
+  );
+  const chartData     = useMemo(() => {
+    const filtered = weeklyRaw.filter(w => w.total > 0 || w.isForecast);
+    return aggregateTimeSeries(filtered, timeAggregation as TimeAggregation);
+  }, [weeklyRaw, timeAggregation]);
 
   // ── YoY Synthetic Overlay ─────────────────────────────────────────────────────
   const chartDataWithExtras = useMemo(() => chartData.map((w, i) => ({
@@ -405,13 +535,29 @@ export default function SpendDashboard() {
   }, [filteredRows]);
 
   // ── Brush Range ───────────────────────────────────────────────────────────────
-  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  // Default to a 13-week window centered on the most recent historical week,
+  // so the chart isn't visually flattened when the dataset spans many weeks.
+  const DEFAULT_WINDOW_WEEKS = 13;
+  const computeDefaultBrush = (len: number) => {
+    if (len <= DEFAULT_WINDOW_WEEKS) return null;
+    // Find the last historical week index, otherwise use the last week
+    const lastHistIdx = chartData.findIndex(p => p.isForecast) - 1;
+    const anchor = lastHistIdx > 0 ? lastHistIdx : len - 1;
+    const half = Math.floor(DEFAULT_WINDOW_WEEKS / 2);
+    const startIndex = Math.max(0, anchor - half);
+    const endIndex   = Math.min(len - 1, startIndex + DEFAULT_WINDOW_WEEKS - 1);
+    return { startIndex, endIndex };
+  };
+  const [brushRange, setBrushRange] = useState<{ startIndex: number; endIndex: number } | null>(
+    () => computeDefaultBrush(chartData.length)
+  );
   const prevChartLen = React.useRef(chartData.length);
   React.useEffect(() => {
     if (prevChartLen.current !== chartData.length) {
-      setBrushRange(null);
+      setBrushRange(computeDefaultBrush(chartData.length));
       prevChartLen.current = chartData.length;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chartData.length]);
 
   const WEEK_PRESETS = [
@@ -434,32 +580,37 @@ export default function SpendDashboard() {
   }, [brushRange, chartData.length]);
 
   const chartSuppliers = useMemo(() => supplierSplit.slice(0, 8).map(s => s.supplier), [supplierSplit]);
+  // In market-line mode, the series shown are markets present in the filtered data
+  const chartMarkets = useMemo(
+    () => [...new Set(filteredRows.map(r => r.market))].sort(),
+    [filteredRows],
+  );
+  const MARKET_COLORS_LOCAL: Record<string, string> = {
+    DACH: '#067A46', BENELUX: '#1565C0', DKSE: '#E8820C', US: '#9C27B0',
+    FR: '#6A1B9A', GB: '#C62828', AU: '#00838F', NZ: '#558B2F',
+    IE: '#37474F', CA: '#0277BD', EU: '#00695C',
+  };
 
-  const hasFilters = filterCategory !== 'All' || filterMarket !== 'All' || filterStatus !== 'All' || filterCategoryManager !== 'All' || search !== '';
+  const hasFilters = filterCategory !== 'All' || filterMarkets.length > 0 || filterStatus !== 'All' || filterCategoryManager !== 'All' || filterSubCategory.length > 0 || search !== '';
 
   const contextLabel = [
     filterCategory !== 'All' ? filterCategory : 'All Categories',
-    filterMarket   !== 'All' ? filterMarket   : 'All Markets',
+    filterMarkets.length === 0 ? 'All Markets' : filterMarkets.length === 1 ? filterMarkets[0] : `${filterMarkets.length} markets`,
   ].join(' · ');
 
   // ── Smart Filter Presets ──────────────────────────────────────────────────────
+  const INTL_MARKETS = liveMarkets.filter(m => m !== 'US');
+
   const SMART_PRESETS = [
-    { label: '⚠ At Risk',  apply: () => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); setAnomalyDismissed(false); } },
-    { label: 'Bakery',     apply: () => { setFilterCategory('Bakery');  setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: 'Grocery',    apply: () => { setFilterCategory('Grocery'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: 'Protein',    apply: () => { setFilterCategory('Protein'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: 'DACH',       apply: () => { setFilterMarket('DACH');   setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: 'US',         apply: () => { setFilterMarket('US');     setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
-    { label: 'DKSE',       apply: () => { setFilterMarket('DKSE');   setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
+    { label: '⚠ At Risk',      apply: () => { setFilterCategory('All'); setFilterMarkets([]); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); setAnomalyDismissed(false); } },
+    { label: '🌎 North America', apply: () => { setFilterMarkets(['US']); setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
+    { label: '🌍 INTL',         apply: () => { setFilterMarkets(INTL_MARKETS); setFilterCategory('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); } },
   ];
 
   const isPresetActive = (label: string) => {
-    if (label === 'Bakery')     return filterCategory === 'Bakery'  && filterMarket === 'All' && filterStatus === 'All';
-    if (label === 'Grocery')    return filterCategory === 'Grocery' && filterMarket === 'All' && filterStatus === 'All';
-    if (label === 'Protein')    return filterCategory === 'Protein' && filterMarket === 'All' && filterStatus === 'All';
-    if (label === 'DACH')       return filterMarket === 'DACH';
-    if (label === 'US')         return filterMarket === 'US';
-    if (label === 'DKSE')       return filterMarket === 'DKSE';
+    if (label === '⚠ At Risk')       return !anomalyDismissed;
+    if (label === '🌎 North America') return filterMarkets.length === 1 && filterMarkets[0] === 'US';
+    if (label === '🌍 INTL')         return filterMarkets.length === INTL_MARKETS.length && INTL_MARKETS.every(m => filterMarkets.includes(m));
     return false;
   };
 
@@ -467,7 +618,7 @@ export default function SpendDashboard() {
   const buildContext = useCallback(() => {
     const lines: string[] = [];
     lines.push(`## Current Dashboard View`);
-    lines.push(`Filters: Category=${filterCategory}, Market=${filterMarket}, Status=${filterStatus}, Category Manager=${filterCategoryManager}`);
+    lines.push(`Filters: Category=${filterCategory}, Sub-Category=${filterSubCategory.length === 0 ? 'All' : filterSubCategory.join(',')}, Markets=${filterMarkets.length === 0 ? 'All' : filterMarkets.join(',')}, Status=${filterStatus}, Category Manager=${filterCategoryManager}`);
     lines.push('');
     lines.push(`## Key Metrics`);
     lines.push(`- Total Actual Spend: €${metrics.totalActualSpendEur.toLocaleString('de-DE')}`);
@@ -490,7 +641,7 @@ export default function SpendDashboard() {
       lines.push(`${supplier} | ${v.category} | ${v.market} | ${v.categoryManager} | €${v.actualEur.toLocaleString('de-DE')} | €${v.awardedEur.toLocaleString('de-DE')} | ${util}%${util >= 80 ? ' ⚠ AT RISK' : ''}`);
     });
     return lines.join('\n');
-  }, [filterCategory, filterMarket, filterStatus, filterCategoryManager, filteredRows, metrics]);
+  }, [filterCategory, filterSubCategory, filterMarkets, filterStatus, filterCategoryManager, filteredRows, metrics]);
 
   // ── Conversational Drill-Down ─────────────────────────────────────────────────
   // Dispatches a custom event picked up by the global AIChatAssistant.
@@ -542,7 +693,9 @@ export default function SpendDashboard() {
             <div style={{ font: '400 13px/18px var(--font-body)', color: pm ? '#94A3B8' : '#676767', marginTop: 4, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <span>Contract period: Jun 2025 – Jun 2026</span>
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
-              <span>{contextLabel}</span>
+              {dataSource === 'loading'    && <span style={{ color: '#E8820C' }}>⟳ Loading…</span>}
+              {dataSource === 'databricks' && <span style={{ color: '#067A46' }}>● Live data</span>}
+              {dataSource === 'static'     && <span style={{ color: '#AAAAAA' }}>● Static data</span>}
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#BBB', display: 'inline-block' }} />
               <span>{metrics.supplierCount} supplier{metrics.supplierCount !== 1 ? 's' : ''}</span>
             </div>
@@ -553,15 +706,25 @@ export default function SpendDashboard() {
                 ⚠ {anomalies.length} Alert{anomalies.length !== 1 ? 's' : ''}
               </button>
             )}
-            <button onClick={generateBrief} style={{ padding: '6px 14px', background: '#EFF6FF', color: '#1D4ED8', borderRadius: 6, font: '600 12px/16px var(--font-body)', border: '1px solid #BFDBFE', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              📋 Executive Brief
+            <button onClick={generateBrief} style={{
+              padding: '9px 20px',
+              background: briefLoading ? '#166534' : 'linear-gradient(135deg, #067A46 0%, #0A9E5C 100%)',
+              color: '#fff',
+              borderRadius: 8,
+              font: '700 13px/18px var(--font-body)',
+              border: 'none',
+              cursor: briefLoading ? 'wait' : 'pointer',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 8px rgba(6,122,70,0.35)',
+              letterSpacing: '.01em',
+              display: 'flex', alignItems: 'center', gap: 7,
+              transition: 'box-shadow 150ms, transform 150ms',
+            }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(6,122,70,0.5)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 8px rgba(6,122,70,0.35)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+            >
+              {briefLoading ? '⟳ Generating…' : '📋 Executive Brief'}
             </button>
-            <button onClick={() => setPresenterMode(m => !m)} style={{ padding: '6px 14px', borderRadius: 6, font: '600 12px/16px var(--font-body)', border: `1px solid ${pm ? '#7C3AED' : '#E4E4E4'}`, cursor: 'pointer', whiteSpace: 'nowrap', background: pm ? '#6D28D9' : '#fff', color: pm ? '#fff' : '#4B4B4B' }}>
-              {pm ? '✕ Exit Presenter' : '🎯 Presenter Mode'}
-            </button>
-            <span style={{ padding: '6px 12px', background: '#F6FDE9', color: '#067A46', borderRadius: 6, font: '600 12px/16px var(--font-body)', border: '1px solid #D2F895', whiteSpace: 'nowrap' }}>
-              ● Live data
-            </span>
           </div>
         </div>
       </header>
@@ -592,25 +755,23 @@ export default function SpendDashboard() {
         )}
 
         {/* ── Smart Filter Chips ─────────────────────────────────────────── */}
-        {!pm && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ font: '500 11px/14px var(--font-body)', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '.04em', flexShrink: 0 }}>Quick:</span>
-            {SMART_PRESETS.map(p => {
-              const active = isPresetActive(p.label);
-              return (
-                <button key={p.label} onClick={p.apply} style={{
-                  padding: '4px 12px', borderRadius: 20, font: '500 12px/18px var(--font-body)',
-                  border: `1px solid ${active ? '#067A46' : '#E0E0E0'}`,
-                  background: active ? '#067A46' : '#fff', color: active ? '#fff' : '#4B4B4B',
-                  cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 120ms',
-                }}>{p.label}</button>
-              );
-            })}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ font: '500 11px/14px var(--font-body)', color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '.04em', flexShrink: 0 }}>Quick:</span>
+          {SMART_PRESETS.map(p => {
+            const active = isPresetActive(p.label);
+            return (
+              <button key={p.label} onClick={p.apply} style={{
+                padding: '4px 12px', borderRadius: 20, font: '500 12px/18px var(--font-body)',
+                border: `1px solid ${active ? '#067A46' : '#E0E0E0'}`,
+                background: active ? '#067A46' : '#fff', color: active ? '#fff' : '#4B4B4B',
+                cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 120ms',
+              }}>{p.label}</button>
+            );
+          })}
+        </div>
 
         {/* ── Filter Toolbar ─────────────────────────────────────────────── */}
-        {!pm && (
+        {(true) && (
           <div style={{ background: '#fff', borderRadius: 10, padding: '14px 20px', border: '1px solid #E4E4E4', display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 220px', display: 'flex', flexDirection: 'column', gap: 3 }}>
               <label style={{ font: '500 11px/14px var(--font-body)', color: '#676767', letterSpacing: '.03em', textTransform: 'uppercase' }}>Search</label>
@@ -629,14 +790,24 @@ export default function SpendDashboard() {
                 )}
               </div>
             </div>
-            <FilterSelect label="Category"     options={['All', ...CATEGORIES]}            value={filterCategory}        onChange={setFilterCategory} />
-            <FilterSelect label="Market"       options={['All', ...MARKETS]}               value={filterMarket}          onChange={setFilterMarket} />
+            <FilterSelect label="Category"     options={['All', ...liveCategories]}        value={filterCategory}        onChange={v => { setFilterCategory(v); setFilterSubCategory([]); }} />
+            <MultiSelectFilter
+              label="Sub-Category"
+              options={
+                filterCategory !== 'All'
+                  ? (SUBCATS_BY_CATEGORY[filterCategory] ?? [])
+                  : Object.keys(SUBCAT_TO_MANAGER).sort()
+              }
+              values={filterSubCategory}
+              onChange={setFilterSubCategory}
+            />
+            <MultiSelectFilter label="Market"  options={liveMarkets}                      values={filterMarkets}        onChange={setFilterMarkets} />
             <FilterSelect label="Status"       options={['All', 'Historical', 'Forecast']} value={filterStatus}          onChange={v => setFilterStatus(v as 'All' | 'Historical' | 'Forecast')} />
             <FilterSelect label="Cat. Manager" options={['All', ...CATEGORY_MANAGERS]}     value={filterCategoryManager} onChange={setFilterCategoryManager} />
             {hasFilters && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <label style={{ font: '500 11px/14px var(--font-body)', color: 'transparent', letterSpacing: '.03em' }}>x</label>
-                <button onClick={() => { setFilterCategory('All'); setFilterMarket('All'); setFilterStatus('All'); setFilterCategoryManager('All'); setSearch(''); }} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #E4E4E4', background: '#fff', color: '#676767', font: '400 13px/18px var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>
+                <button onClick={() => { setFilterCategory('All'); setFilterMarkets([]); setFilterStatus('All'); setFilterCategoryManager('All'); setFilterSubCategory([]); setSearch(''); }} style={{ padding: '7px 14px', borderRadius: 7, border: '1.5px solid #E4E4E4', background: '#fff', color: '#676767', font: '400 13px/18px var(--font-body)', cursor: 'pointer', whiteSpace: 'nowrap' }}>✕ Clear</button>
               </div>
             )}
           </div>
@@ -644,21 +815,54 @@ export default function SpendDashboard() {
 
         {/* ── KPI Strip ──────────────────────────────────────────────────── */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <KpiCard label="Total Actual Spend"  value={fmtFull(metrics.totalActualSpendEur)}  sub={`${metrics.budgetUtilizationPct}% of awarded budget`} tone="neutral" />
-          <KpiCard label="Awarded Budget"       value={fmtFull(metrics.totalAwardedSpendEur)} sub={`Remaining: ${fmtFull(Math.max(0, savingsEur))}`} tone="neutral" />
+          <KpiCard
+            label="Total Actual Spend"
+            value={fmtFull(metrics.totalActualSpendEur)}
+            sub={`${metrics.budgetUtilizationPct}% of awarded budget`}
+            tone="neutral"
+            tip="Sum of Cumulative Actual Spend EUR across all suppliers in the current filter view. One value per supplier (max across rows) so duplicate SKU lines do not double-count."
+          />
+          <KpiCard
+            label="Awarded Budget"
+            value={fmtFull(metrics.totalAwardedSpendEur)}
+            sub={`Remaining: ${fmtFull(Math.max(0, savingsEur))}`}
+            tone="neutral"
+            tip="Sum of Cumulative Awarded Spend EUR across all suppliers — the contracted spend ceiling per the awarded contracts in the current filter view."
+          />
           <KpiCard
             label="Savings vs Budget"
             value={savingsEur >= 0 ? `+${fmtFull(savingsEur)}` : fmtFull(savingsEur)}
             sub={savingsEur >= 0 ? 'Under budget — potential saving' : 'Over budget — action needed'}
             tone={savingsEur >= 0 ? 'positive' : 'danger'}
+            tip="Awarded Budget minus Total Actual Spend. Positive = under budget (potential saving). Negative = over budget (overrun risk)."
           />
-          <KpiCard label="Budget Utilisation"  value={`${metrics.budgetUtilizationPct}%`}   sub="Actual vs contracted spend" tone={metrics.budgetUtilizationPct >= 90 ? 'danger' : metrics.budgetUtilizationPct >= 75 ? 'warning' : 'neutral'} />
-          <KpiCard label="Avg Adherence"        value={`${metrics.avgAdherencePct}%`}         sub="Actual vs awarded volume"  tone={metrics.avgAdherencePct >= 80 ? 'positive' : 'warning'} />
+          <KpiCard
+            label="Budget Utilisation"
+            value={`${metrics.budgetUtilizationPct}%`}
+            sub="Actual vs contracted spend"
+            tone={metrics.budgetUtilizationPct >= 90 ? 'danger' : metrics.budgetUtilizationPct >= 75 ? 'warning' : 'neutral'}
+            tip="Total Actual Spend / Awarded Budget × 100. Above 100% means actual spend has exceeded the contract ceiling. Compare against contract elapsed % for pacing context."
+          />
+          <KpiCard
+            label="Avg Adherence"
+            value={`${metrics.avgAdherencePct}%`}
+            sub="Actual vs awarded volume"
+            tone={metrics.avgAdherencePct >= 80 ? 'positive' : 'warning'}
+            tip="Average of Adherence % (Actual Qty / Awarded Qty) across all non-zero rows. Individual values capped at 200% to exclude data-quality outliers. Zero-adherence rows excluded (not-yet-shipped items)."
+          />
           <KpiCard
             label="At-Risk Contracts"
             value={String(metrics.atRiskSuppliers)}
-            sub="Supplier(s) ≥ 80% utilization"
+            sub="Supplier(s) >= 80% utilization"
             tone={metrics.atRiskSuppliers > 0 ? (metrics.atRiskSuppliers >= 3 ? 'danger' : 'warning') : 'positive'}
+            tip="Count of suppliers whose Actual Spend / Awarded Budget is at or above 80%. These contracts are approaching or have breached their ceiling and need immediate review."
+          />
+          <KpiCard
+            label="Unique SKUs"
+            value={String(skuQoQ.current)}
+            sub={skuQoQ.previous > 0 ? `${skuQoQ.deltaPct >= 0 ? '+' : ''}${skuQoQ.deltaPct}% QoQ (was ${skuQoQ.previous})` : `${skuQoQ.quarterLabel}`}
+            tone={skuQoQ.deltaPct > 5 ? 'positive' : skuQoQ.deltaPct < -5 ? 'warning' : 'neutral'}
+            tip="Distinct SKU codes with an active contract spanning the current quarter. The QoQ delta compares against the previous quarter's active SKU set — positive = expanding catalogue, negative = consolidating."
           />
         </div>
 
@@ -669,12 +873,39 @@ export default function SpendDashboard() {
           <div style={{ background: pm ? '#1E293B' : '#fff', borderRadius: 10, padding: '20px 24px', border: `1px solid ${pm ? '#334155' : '#E4E4E4'}` }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
               <div>
-                <div style={{ font: '600 15px/20px var(--font-body)', color: pm ? '#F1F5F9' : '#242424' }}>Weekly Spend (EUR)</div>
+                <div style={{ font: '600 15px/20px var(--font-body)', color: pm ? '#F1F5F9' : '#242424', display: 'flex', alignItems: 'center' }}>
+                  Weekly Spend (EUR)
+                  <InfoTip text="Each bar shows weekly spend by supplier. Historical weeks use the snapshot's cumulative actual spend, distributed evenly across contract-elapsed weeks. Forecast weeks (grey) extrapolate remaining contract value to the contract end date. YoY toggle overlays an estimate of prior-year weekly spend for trend comparison." />
+                </div>
                 <div style={{ font: '400 12px/16px var(--font-body)', color: pm ? '#94A3B8' : '#676767', marginTop: 2 }}>
-                  Actual spend per period by supplier · {chartSuppliers.length < supplierSplit.length ? `Top ${chartSuppliers.length} of ${supplierSplit.length} suppliers` : `${chartSuppliers.length} supplier${chartSuppliers.length !== 1 ? 's' : ''}`}
+                  {chartMode === 'market'
+                    ? `${timeAggregation === 'week' ? 'Weekly' : timeAggregation === 'month' ? 'Monthly' : 'Quarterly'} spend per period by market · ${chartMarkets.length} market${chartMarkets.length !== 1 ? 's' : ''}`
+                    : `${timeAggregation === 'week' ? 'Weekly' : timeAggregation === 'month' ? 'Monthly' : 'Quarterly'} spend per period by supplier · ${chartSuppliers.length < supplierSplit.length ? `Top ${chartSuppliers.length} of ${supplierSplit.length} suppliers` : `${chartSuppliers.length} supplier${chartSuppliers.length !== 1 ? 's' : ''}`}`}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* By Supplier / By Market toggle (#1) */}
+                <div style={{ display: 'flex', border: '1px solid #D4D4D4', borderRadius: 5, overflow: 'hidden' }}>
+                  {(['supplier', 'market'] as const).map(m => (
+                    <button key={m} onClick={() => setChartMode(m)} style={{
+                      padding: '3px 9px', border: 'none',
+                      background: chartMode === m ? '#067A46' : '#fff',
+                      color: chartMode === m ? '#fff' : '#555',
+                      font: '500 11px/18px var(--font-body)', cursor: 'pointer', transition: 'all 120ms',
+                    }}>{m === 'supplier' ? 'By Supplier' : 'By Market'}</button>
+                  ))}
+                </div>
+                {/* Time aggregation (#3) */}
+                <div style={{ display: 'flex', border: '1px solid #D4D4D4', borderRadius: 5, overflow: 'hidden' }}>
+                  {(['week', 'month', 'quarter'] as const).map(t => (
+                    <button key={t} onClick={() => setTimeAggregation(t)} style={{
+                      padding: '3px 9px', border: 'none',
+                      background: timeAggregation === t ? '#067A46' : '#fff',
+                      color: timeAggregation === t ? '#fff' : '#555',
+                      font: '500 11px/18px var(--font-body)', cursor: 'pointer', transition: 'all 120ms',
+                    }}>{t === 'week' ? 'W' : t === 'month' ? 'M' : 'Q'}</button>
+                  ))}
+                </div>
                 {/* YoY toggle */}
                 <button onClick={() => setShowYoY(y => !y)} style={{
                   padding: '3px 10px', borderRadius: 5, border: `1px solid ${showYoY ? '#7C3AED' : '#D4D4D4'}`,
@@ -701,13 +932,20 @@ export default function SpendDashboard() {
                   <YAxis tick={{ fontSize: 11, fill: pm ? '#94A3B8' : '#676767' }} tickLine={false} axisLine={false} tickFormatter={v => v === 0 ? '' : fmt(v)} width={52} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(6,122,70,.04)' }} />
                   <Legend formatter={v => v} wrapperStyle={{ font: '400 11px var(--font-body)', paddingTop: 8 }} />
-                  {chartSuppliers.map((sup, idx) => {
+                  {chartMode === 'supplier' && chartSuppliers.map((sup, idx) => {
                     const color = SUPPLIER_COLOR[sup] ?? '#BBB';
                     const isLast = idx === chartSuppliers.length - 1;
                     return (
                       <Bar key={sup} dataKey={supplierKey(sup)} stackId="a" fill={color} name={sup} radius={isLast ? [3, 3, 0, 0] : [0, 0, 0, 0]}>
                         {chartDataWithExtras.map((entry, j) => <Cell key={j} fill={entry.isForecast ? '#C8C8C8' : color} />)}
                       </Bar>
+                    );
+                  })}
+                  {chartMode === 'market' && chartMarkets.map(m => {
+                    const color = MARKET_COLORS_LOCAL[m] ?? '#888';
+                    return (
+                      <Line key={m} dataKey={m} type="monotone" stroke={color} strokeWidth={2.5}
+                            dot={{ fill: color, r: 3 }} activeDot={{ r: 5 }} name={m} />
                     );
                   })}
                   {showYoY && (
@@ -732,7 +970,10 @@ export default function SpendDashboard() {
           {/* Supplier Split — clickable for drill-down */}
           <div style={{ background: pm ? '#1E293B' : '#fff', borderRadius: 10, padding: '20px 24px', border: `1px solid ${pm ? '#334155' : '#E4E4E4'}`, overflowY: 'auto', maxHeight: pm ? 480 : 380 }}>
             <div style={{ marginBottom: 16 }}>
-              <div style={{ font: '600 15px/20px var(--font-body)', color: pm ? '#F1F5F9' : '#242424' }}>Supplier Split</div>
+              <div style={{ font: '600 15px/20px var(--font-body)', color: pm ? '#F1F5F9' : '#242424', display: 'flex', alignItems: 'center' }}>
+                Supplier Split
+                <InfoTip text="Each supplier's actual cumulative spend, sorted descending. The bar shows utilisation (actual / awarded × 100%). Suppliers at or above 80% utilisation are flagged red. Click a supplier to send a deep-dive question to the AI assistant." />
+              </div>
               <div style={{ font: '400 12px/16px var(--font-body)', color: pm ? '#94A3B8' : '#676767', marginTop: 2 }}>
                 By actual spend · click any supplier to AI drill-down
               </div>

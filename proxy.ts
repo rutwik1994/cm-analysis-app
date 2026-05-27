@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const AUTH_COOKIE = 'sa-auth';
-const PUBLIC = ['/login', '/api/auth'];
+const PUBLIC = ['/login', '/api/auth', '/api/logout'];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

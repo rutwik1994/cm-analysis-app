@@ -295,16 +295,17 @@ function PerformanceMatrix({ suppliers }: { suppliers: SupplierRecord[] }) {
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
 
-  // Scale: X = utilPct (0-110), Y = adherencePct (0-25 — data range)
+  // Scale: X = utilPct (0-110), Y = adherencePct — dynamic based on actual data
   const xMin = 0, xMax = 110;
-  const yMin = 0, yMax = 25;
+  const yMax = Math.max(100, ...suppliers.map(s => s.adherencePct)) * 1.1; // at least 0-100, +10% headroom
+  const yMin = 0;
 
   const toX = (v: number) => PAD.left + ((v - xMin) / (xMax - xMin)) * plotW;
   const toY = (v: number) => PAD.top + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
 
   // Quadrant thresholds
   const xMid = toX(55);
-  const yMid = toY(12.5);
+  const yMid = toY(yMax / 2);
 
   // Stagger labels vertically to reduce overlap between dots at similar positions
   const labelOffsets = new Map<string, number>();
@@ -335,10 +336,10 @@ function PerformanceMatrix({ suppliers }: { suppliers: SupplierRecord[] }) {
           <text x={toX(v)} y={H - PAD.bottom + 14} textAnchor="middle" fontSize={9} fill="#9CA3AF">{v}%</text>
         </g>
       ))}
-      {[0, 5, 10, 15, 20, 25].map((v) => (
+      {Array.from({ length: 6 }, (_, i) => Math.round((yMax / 5) * i)).map((v) => (
         <g key={v}>
           <line x1={PAD.left} y1={toY(v)} x2={W - PAD.right} y2={toY(v)} stroke="#E4E4E4" strokeDasharray="3,3" />
-          <text x={PAD.left - 4} y={toY(v) + 4} textAnchor="end" fontSize={9} fill="#9CA3AF">{v}%</text>
+          <text x={PAD.left - 4} y={toY(v) + 4} textAnchor="end" fontSize={9} fill="#9CA3AF">{Math.round(v)}%</text>
         </g>
       ))}
 
@@ -581,14 +582,14 @@ export default function Page() {
             }}
           />
           <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={selectStyle}>
-            {categories.map((c) => <option key={c}>{c === "All" ? "All Categories" : c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c === "All" ? "All Categories" : c}</option>)}
           </select>
           <select value={filterMarket} onChange={(e) => setFilterMarket(e.target.value)} style={selectStyle}>
-            {markets.map((m) => <option key={m}>{m === "All" ? "All Markets" : m}</option>)}
+            {markets.map((m) => <option key={m} value={m}>{m === "All" ? "All Markets" : m}</option>)}
           </select>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selectStyle}>
             {["All", "Critical", "At Risk", "On Track", "Under-Delivering"].map((s) => (
-              <option key={s}>{s === "All" ? "All Statuses" : s}</option>
+              <option key={s} value={s}>{s === "All" ? "All Statuses" : s}</option>
             ))}
           </select>
           <span style={{ font: "400 12px/16px var(--font-body)", color: "#9CA3AF", marginLeft: "auto" }}>
