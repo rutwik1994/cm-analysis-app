@@ -166,7 +166,11 @@ export async function GET(req: NextRequest) {
       GROUP BY country_group
     `;
 
-    // ── Transaction rows (for the PO table) — top 3000 by value ────────────────
+    // ── Transaction rows (for the PO table) — all rows, no LIMIT ───────────────
+    // Grouped by order_number × supplier × country_group × sku_category so the
+    // result set is PO-level, not raw line-item level. All rows are returned so
+    // client-side aggregations (supplier chart, monthly trend, category split)
+    // are accurate rather than biased toward top-value POs.
     const sql = `
       SELECT
         order_number                                          AS poNumber,
@@ -194,7 +198,6 @@ export async function GET(req: NextRequest) {
       WHERE ${where.join(' AND ')}
       GROUP BY order_number, supplier_name, country_group, sku_category
       ORDER BY SUM(item_total_price) DESC
-      LIMIT 3000
     `;
 
     const [rawMarkets, rawRows] = await Promise.all([
@@ -224,8 +227,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ rows, marketTotals }, {
       headers: {
-        'X-Data-Source': 'databricks',
-        'X-Row-Count':   String(rows.length),
+        'X-Data-Source':  'databricks',
+        'X-Row-Count':    String(rows.length),
+        'X-Result-Count': String(rows.length),
       },
     });
   } catch (err) {
