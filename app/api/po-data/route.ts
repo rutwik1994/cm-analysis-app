@@ -73,10 +73,12 @@ const MARKET_TO_DB: Record<string, string[]> = {
   BENELUX: ['BENELUX', 'BENELUXFR'],   // BENELUXFR = legacy combined value
   FR:      ['FR', 'FRANCE'],
   GB:      ['GB', 'UK'],
-  AU:      ['AU'],
-  NZ:      ['NZ'],
+  AUNZ:    ['AUNZ', 'AU', 'NZ'],       // table uses AUNZ — AU/NZ are legacy values
+  EU:      ['EU'],                      // EU hub market (new as of 2025)
   IE:      ['IE'],
   CA:      ['CA'],
+  ES:      ['ES'],                      // Spain (small, emerging)
+  IT:      ['IT'],                      // Italy (small, emerging)
 };
 
 // HF week ranges — built dynamically per year so the API works for any year
@@ -158,6 +160,9 @@ export async function GET(req: NextRequest) {
           WHEN 'FRANCE'    THEN 'FR'
           WHEN 'GB'        THEN 'GB'
           WHEN 'UK'        THEN 'GB'
+          WHEN 'AU'        THEN 'AUNZ'
+          WHEN 'NZ'        THEN 'AUNZ'
+          WHEN 'AUNZ'      THEN 'AUNZ'
           ELSE country_group
         END                                                              AS market,
         ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0)             AS spendEur
@@ -184,6 +189,9 @@ export async function GET(req: NextRequest) {
           WHEN 'FRANCE'    THEN 'FR'
           WHEN 'GB'        THEN 'GB'
           WHEN 'UK'        THEN 'GB'
+          WHEN 'AU'        THEN 'AUNZ'
+          WHEN 'NZ'        THEN 'AUNZ'
+          WHEN 'AUNZ'      THEN 'AUNZ'
           ELSE country_group
         END                                                   AS market,
         sku_category                                          AS category,

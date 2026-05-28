@@ -19,21 +19,49 @@ if (!HOST || !TOKEN || !WAREHOUSE_ID) {
   }
 }
 
+interface ChunkResult {
+  data_array?: (string | null)[][];
+  next_chunk_index?: number;
+  next_chunk_internal_link?: string;
+}
+
 interface StatementResponse {
   statement_id: string;
   status: { state: string; error?: { message: string } };
-  result?: {
-    data_array?: (string | null)[][];   // JSON_ARRAY format
+  result?: ChunkResult & {
     schema: { columns: { name: string; type_name: string }[] };
   };
   manifest?: {
     schema: { columns: { name: string; type_name: string }[] };
+    total_chunk_count?: number;
+    total_row_count?: number;
   };
+}
+
+/**
+ * Fetch a single result chunk by index.
+ * Used to page through multi-chunk inline results.
+ */
+async function fetchChunk(
+  statementId: string,
+  chunkIndex: number
+): Promise<ChunkResult> {
+  const url = `https://${HOST}/api/2.0/sql/statements/${statementId}/result/chunks/${chunkIndex}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Databricks chunk fetch HTTP ${res.status}: ${await res.text()}`);
+  }
+  return res.json();
 }
 
 /**
  * Run a SQL query on Databricks and return rows as plain objects.
  * Uses the synchronous execution path (wait_timeout=30s).
+ * Automatically pages through all result chunks — the initial response
+ * only contains the first chunk; subsequent chunks are fetched via the
+ * chunk API to ensure no rows are silently dropped.
  */
 export async function queryDatabricks<T = Record<string, unknown>>(
   sql: string
@@ -49,7 +77,7 @@ export async function queryDatabricks<T = Record<string, unknown>>(
     body: JSON.stringify({
       statement: sql,
       warehouse_id: WAREHOUSE_ID,
-      wait_timeout: '30s',   // wait up to 30s for inline result
+      wait_timeout: '50s',   // increased from 30s to handle larger result sets
       on_wait_timeout: 'CANCEL',
       format: 'JSON_ARRAY',
       disposition: 'INLINE',
@@ -77,10 +105,32 @@ export async function queryDatabricks<T = Record<string, unknown>>(
       (c) => c.name
     );
 
-  // JSON_ARRAY format: data_array is rows of plain string values
-  const rows = data.result?.data_array ?? [];
+  // Collect all rows across all chunks.
+  // The initial response contains chunk 0; subsequent chunks must be fetched
+  // individually. Without this loop, large result sets are silently truncated.
+  const allRawRows: (string | null)[][] = [];
 
-  return rows.map((row) => {
+  let currentChunk: ChunkResult | undefined = data.result;
+  while (currentChunk) {
+    const chunkRows = currentChunk.data_array ?? [];
+    allRawRows.push(...chunkRows);
+
+    if (currentChunk.next_chunk_index != null) {
+      currentChunk = await fetchChunk(data.statement_id, currentChunk.next_chunk_index);
+    } else {
+      break;
+    }
+  }
+
+  const totalChunks = data.manifest?.total_chunk_count ?? 1;
+  if (totalChunks > 1) {
+    console.info(
+      `[databricks] Fetched ${totalChunks} chunks, ${allRawRows.length} total rows` +
+      (data.manifest?.total_row_count ? ` (expected ${data.manifest.total_row_count})` : '')
+    );
+  }
+
+  return allRawRows.map((row) => {
     const obj: Record<string, unknown> = {};
     row.forEach((cell, i) => {
       obj[columns[i]] = cell ?? null;

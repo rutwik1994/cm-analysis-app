@@ -43,7 +43,7 @@ const STATUS_CONFIG: Record<POStatus, { color: string; bg: string; dot: string; 
 };
 
 const ALL_STATUSES: POStatus[] = ["INITIATED", "APPROVED", "SENT"];
-const MARKETS = ["DACH", "US", "DKSE", "BENELUX", "FR", "GB", "AU", "NZ", "IE", "CA"];
+const MARKETS = ["DACH", "US", "DKSE", "BENELUX", "FR", "GB", "AUNZ", "EU", "IE", "CA", "ES", "IT"];
 
 const MARKET_COLORS: Record<string, string> = {
   DACH:    "#067A46",
@@ -52,10 +52,12 @@ const MARKET_COLORS: Record<string, string> = {
   BENELUX: "#D97706",
   FR:      "#6A1B9A",
   GB:      "#C62828",
-  AU:      "#00838F",
-  NZ:      "#558B2F",
+  AUNZ:    "#00838F",
+  EU:      "#558B2F",
   IE:      "#37474F",
   CA:      "#0277BD",
+  ES:      "#B45309",
+  IT:      "#9D174D",
 };
 
 const BAR_COLORS = [
