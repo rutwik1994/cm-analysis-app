@@ -33,8 +33,26 @@ export async function GET() {
       `SELECT * FROM ${TABLE} LIMIT 3`
     );
 
+    // 3. True week range in the table (no year filter — tells us how far back data goes)
+    const weekRange = await queryDatabricks<{ min_week: string; max_week: string; total_rows: string }>(
+      `SELECT MIN(week) AS min_week, MAX(week) AS max_week, COUNT(*) AS total_rows
+       FROM ${TABLE}
+       WHERE include_in_analysis = true`
+    );
+
+    // 4. Row count per year (to understand coverage)
+    const yearBreakdown = await queryDatabricks<{ year: string; row_count: string; po_count: string }>(
+      `SELECT SUBSTRING(week, 1, 4) AS year, COUNT(*) AS row_count, COUNT(DISTINCT order_number) AS po_count
+       FROM ${TABLE}
+       WHERE include_in_analysis = true
+       GROUP BY SUBSTRING(week, 1, 4)
+       ORDER BY year`
+    );
+
     return NextResponse.json({
       table: TABLE,
+      weekRange: weekRange[0] ?? null,
+      yearBreakdown,
       columns,
       sample,
     }, {

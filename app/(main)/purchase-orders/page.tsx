@@ -19,10 +19,16 @@ const fmtNum = (n: number) => n.toLocaleString();
 
 type Period = "full" | "h1" | "h2" | "q1" | "q2" | "q3" | "q4";
 
-const PERIOD_LABEL: Record<Period, string> = {
-  full: "Full Year 2026", h1: "H1 2026", h2: "H2 2026",
-  q1: "Q1 2026", q2: "Q2 2026", q3: "Q3 2026", q4: "Q4 2026",
-};
+const AVAILABLE_YEARS = [2022, 2023, 2024, 2025, 2026];
+
+function getPeriodLabel(period: Period, year: number): string {
+  const y = String(year);
+  const map: Record<Period, string> = {
+    full: `Full Year ${y}`, h1: `H1 ${y}`, h2: `H2 ${y}`,
+    q1: `Q1 ${y}`, q2: `Q2 ${y}`, q3: `Q3 ${y}`, q4: `Q4 ${y}`,
+  };
+  return map[period];
+}
 
 const PERIOD_GROUPS = [
   { label: "Annual",    options: [{ id: "full" as Period, label: "Full Year" }] },
@@ -220,6 +226,7 @@ export default function PurchaseOrdersPage() {
   const [allRows,        setAllRows]        = useState<PORow[]>(PO_ROWS);
   const [marketTotals,   setMarketTotals]   = useState<Record<string, number>>({});
   const [dataSource,     setDataSource]     = useState<"loading"|"databricks"|"static">("loading");
+  const [year,           setYear]           = useState<number>(2026);
   const [period,         setPeriod]         = useState<Period>("full");
   const [filterMarkets,     setFilterMarkets]     = useState<string[]>([]);
   const [filterStatus,      setFilterStatus]      = useState<string>("");
@@ -227,9 +234,9 @@ export default function PurchaseOrdersPage() {
   const [filterSubCategory, setFilterSubCategory] = useState<string[]>([]);
 
   // Load data
-  const loadData = useCallback((p: Period) => {
+  const loadData = useCallback((p: Period, y: number) => {
     setDataSource("loading");
-    fetch(`/api/po-data?period=${p}`)
+    fetch(`/api/po-data?period=${p}&year=${y}`)
       .then(res => {
         const src = res.headers.get("X-Data-Source");
         return res.json().then((payload: { rows: PORow[]; marketTotals: Record<string, number> }) => ({ payload, src }));
@@ -242,7 +249,7 @@ export default function PurchaseOrdersPage() {
       .catch(() => { setAllRows(PO_ROWS); setMarketTotals({}); setDataSource("static"); });
   }, []);
 
-  useEffect(() => { loadData(period); }, [period, loadData]);
+  useEffect(() => { loadData(period, year); }, [period, year, loadData]);
 
   // Derive live category options — skip empty codes
   const liveCategories = useMemo(() => {
@@ -320,7 +327,7 @@ export default function PurchaseOrdersPage() {
           <div>
             <h1 style={{ font: "500 30px/38px var(--font-display)", color: "#242424", margin: 0 }}>Purchase Orders</h1>
             <div style={{ font: "400 13px/18px var(--font-body)", color: "#676767", marginTop: 4, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span>PO spend · {PERIOD_LABEL[period]}</span>
+              <span>PO spend · {getPeriodLabel(period, year)}</span>
               <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#BBB", display: "inline-block" }} />
               {dataSource === "loading"    && <span style={{ color: "#E8820C" }}>⟳ Loading…</span>}
               {dataSource === "databricks" && <span style={{ color: "#067A46" }}>● Live data</span>}
@@ -332,7 +339,7 @@ export default function PurchaseOrdersPage() {
                 background: "#FFF7ED", color: "#A43700",
                 font: "500 11px/16px var(--font-body)",
               }}>
-                € All values in EUR · FX 2026-05-26
+                € All values in EUR · FX rates 2026-05-26
               </span>
             </div>
           </div>
@@ -344,6 +351,22 @@ export default function PurchaseOrdersPage() {
         {/* ── Period + Filters ────────────────────────────────────────────────── */}
         <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #E4E4E4", padding: "14px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <span style={{ font: "600 12px/16px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>Year</span>
+            <div style={{ display: "flex", border: "1px solid #E4E4E4", borderRadius: 8, overflow: "hidden" }}>
+              {AVAILABLE_YEARS.map(y => (
+                <button key={y} onClick={() => setYear(y)} style={{
+                  padding: "7px 13px", border: "none", cursor: "pointer",
+                  font: "500 12px/16px var(--font-body)",
+                  background: year === y ? "#067A46" : "#fff",
+                  color: year === y ? "#fff" : "#676767",
+                  transition: "all 120ms",
+                  borderRight: y !== 2026 ? "1px solid #E4E4E4" : "none",
+                }}>{y}</button>
+              ))}
+            </div>
+
+            <div style={{ width: 1, height: 24, background: "#E4E4E4", flexShrink: 0 }} />
+
             <span style={{ font: "600 12px/16px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>Period</span>
             <PeriodPicker value={period} onChange={p => setPeriod(p)} />
 

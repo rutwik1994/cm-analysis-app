@@ -79,22 +79,28 @@ const MARKET_TO_DB: Record<string, string[]> = {
   CA:      ['CA'],
 };
 
-// HF week ranges (format matches table: 2026-W01)
-const PERIOD_WEEKS: Record<string, [string, string] | null> = {
-  full: null,
-  h1:   ['2026-W01', '2026-W26'],
-  h2:   ['2026-W27', '2026-W52'],
-  q1:   ['2026-W01', '2026-W13'],
-  q2:   ['2026-W14', '2026-W26'],
-  q3:   ['2026-W27', '2026-W39'],
-  q4:   ['2026-W40', '2026-W52'],
-};
+// HF week ranges — built dynamically per year so the API works for any year
+function getPeriodWeeks(year: number): Record<string, [string, string] | null> {
+  const y = String(year);
+  return {
+    full: null,
+    h1:   [`${y}-W01`, `${y}-W26`],
+    h2:   [`${y}-W27`, `${y}-W52`],
+    q1:   [`${y}-W01`, `${y}-W13`],
+    q2:   [`${y}-W14`, `${y}-W26`],
+    q3:   [`${y}-W27`, `${y}-W39`],
+    q4:   [`${y}-W40`, `${y}-W52`],
+  };
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const markets  = searchParams.get('market')?.split(',').filter(Boolean) ?? [];
   const statuses = searchParams.get('status')?.split(',').filter(Boolean) ?? [];
   const period   = (searchParams.get('period') ?? 'full').toLowerCase();
+  // year param — defaults to 2026; clamp to known data range (2022–2026)
+  const yearRaw  = parseInt(searchParams.get('year') ?? '2026', 10);
+  const year     = isNaN(yearRaw) ? 2026 : Math.max(2022, Math.min(2026, yearRaw));
 
   const configured =
     process.env.DATABRICKS_HOST &&
@@ -114,8 +120,8 @@ export async function GET(req: NextRequest) {
   try {
     const where: string[] = [
       `include_in_analysis = true`,
-      `week >= '2026-W01'`,   // range filter — lets Spark use min/max stats (faster than LIKE)
-      `week <  '2027-W01'`,
+      `week >= '${year}-W01'`,   // range filter — lets Spark use min/max stats (faster than LIKE)
+      `week <  '${year + 1}-W01'`,
       // Restrict to food ingredient categories only — excludes packaging, logistics, etc.
       `sku_category IN ('PTN','DAI','BAK','PHF','DRY','SPI','CON','PRO')`,
     ];
@@ -133,7 +139,7 @@ export async function GET(req: NextRequest) {
       where.push(`status IN (${sList})`);
     }
 
-    const weekRange = PERIOD_WEEKS[period] ?? null;
+    const weekRange = getPeriodWeeks(year)[period] ?? null;
     if (weekRange) {
       where.push(`week >= '${weekRange[0]}'`);
       where.push(`week <= '${weekRange[1]}'`);
