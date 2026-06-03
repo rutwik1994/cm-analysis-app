@@ -2,9 +2,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
-// Feature flag — set NEXT_PUBLIC_PO_ENABLED=true in .env.local to enable locally.
-// Not set on Vercel → page redirects to home.
-const PO_ENABLED = process.env.NEXT_PUBLIC_PO_ENABLED === "true";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartTooltip,
   ResponsiveContainer, Cell, LineChart, Line, Legend,
@@ -217,13 +214,6 @@ function StatusBadge({ status }: { status: POStatus }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PurchaseOrdersPage() {
   const router = useRouter();
-
-  // Gate: redirect to home on Vercel (flag not set)
-  useEffect(() => {
-    if (!PO_ENABLED) router.replace("/");
-  }, [router]);
-
-  if (!PO_ENABLED) return null;
 
   const [allRows,        setAllRows]        = useState<PORow[]>(PO_ROWS);
   const [marketTotals,   setMarketTotals]   = useState<Record<string, number>>({});
