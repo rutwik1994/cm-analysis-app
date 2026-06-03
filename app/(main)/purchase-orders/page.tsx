@@ -218,8 +218,7 @@ export default function PurchaseOrdersPage() {
   const [allRows,        setAllRows]        = useState<PORow[]>(PO_ROWS);
   const [marketTotals,   setMarketTotals]   = useState<Record<string, number>>({});
   const [dataSource,     setDataSource]     = useState<"loading"|"databricks"|"static"|"gdrive">("loading");
-  // Default to GDrive — Databricks is IP-restricted to HF VPN and won't work on Vercel
-  const [sourceToggle,   setSourceToggle]   = useState<"databricks"|"gdrive">("gdrive");
+  const [sourceToggle,   setSourceToggle]   = useState<"databricks"|"gdrive">("databricks");
   const [year,           setYear]           = useState<number>(2026);
   const [period,         setPeriod]         = useState<Period>("full");
   const [filterMarkets,     setFilterMarkets]     = useState<string[]>([]);
