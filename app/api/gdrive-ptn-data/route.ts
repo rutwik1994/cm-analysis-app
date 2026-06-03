@@ -12,6 +12,8 @@
  *   category — PTN | DAI | BAK | PHF | DRY | SPI | CON | PRO
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { PORow, POStatus } from '@/lib/po-data';
 
 export const dynamic = 'force-dynamic';
@@ -37,11 +39,11 @@ type GDRow = {
 
 let _cache: GDRow[] | null = null;
 
-async function load(): Promise<GDRow[]> {
+function load(): GDRow[] {
   if (_cache) return _cache;
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  const res  = await fetch(`${base}/data/gdrive-all-2026.json`, { next: { revalidate: 86400 } });
-  _cache = await res.json();
+  // Read directly from the filesystem — avoids self-HTTP-fetch that fails on Vercel
+  const filePath = join(process.cwd(), 'public', 'data', 'gdrive-all-2026.json');
+  _cache = JSON.parse(readFileSync(filePath, 'utf8'));
   return _cache!;
 }
 
@@ -61,7 +63,7 @@ export async function GET(req: NextRequest) {
   const catFilter = sp.get('category') ?? '';
 
   try {
-    const raw = await load();
+    const raw = load();
 
     const filtered = raw.filter(r => {
       if (!inPeriod(r.wk, period)) return false;
