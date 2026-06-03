@@ -16,7 +16,8 @@ const fmtNum = (n: number) => n.toLocaleString();
 
 type Period = "full" | "h1" | "h2" | "q1" | "q2" | "q3" | "q4";
 
-const AVAILABLE_YEARS = [2022, 2023, 2024, 2025, 2026];
+const AVAILABLE_YEARS_DB     = [2022, 2023, 2024, 2025, 2026];
+const AVAILABLE_YEARS_GDRIVE = [2025, 2026];
 
 function getPeriodLabel(period: Period, year: number): string {
   const y = String(year);
@@ -231,7 +232,7 @@ export default function PurchaseOrdersPage() {
   const loadData = useCallback((p: Period, y: number, src: "databricks"|"gdrive") => {
     setDataSource("loading");
     const url = src === "gdrive"
-      ? `/api/gdrive-ptn-data?period=${p}`
+      ? `/api/gdrive-ptn-data?period=${p}&year=${y}`
       : `/api/po-data?period=${p}&year=${y}`;
     fetch(url)
       .then(res => {
@@ -246,6 +247,13 @@ export default function PurchaseOrdersPage() {
       })
       .catch(() => { setAllRows(PO_ROWS); setMarketTotals({}); setDataSource("static"); });
   }, []);
+
+  // Clamp year to valid range when switching sources
+  useEffect(() => {
+    if (sourceToggle === "gdrive" && !AVAILABLE_YEARS_GDRIVE.includes(year)) {
+      setYear(2026);
+    }
+  }, [sourceToggle, year]);
 
   useEffect(() => { loadData(period, year, sourceToggle); }, [period, year, sourceToggle, loadData]);
 
@@ -355,8 +363,8 @@ export default function PurchaseOrdersPage() {
           }}>
             <span style={{ fontSize: 16 }}>📂</span>
             <span style={{ font: "400 13px/18px var(--font-body)", color: "#1565C0" }}>
-              <strong>GDrive source active</strong> — showing OT_export data for all 8 categories (BAK · CON · DAI · DRY · PHF · PRO · PTN · SPI · 2026 · Lucanet FX).
-              Markets: GB · FR · DACH · DKSE · BENELUX · AUNZ · IE · EU. Excludes: US · CA · ES · IT. Internal HF transfers included (filter by supplier to exclude).
+              <strong>GDrive source active</strong> — showing OT_export data for all 8 categories (BAK · CON · DAI · DRY · PHF · PRO · PTN · SPI · Lucanet FX).
+              Years available: 2025 · 2026. Markets: GB · FR · DACH · DKSE · BENELUX · AUNZ · IE · EU. Excludes: US · CA · ES · IT.
             </span>
           </div>
         )}
@@ -384,22 +392,22 @@ export default function PurchaseOrdersPage() {
 
             <div style={{ width: 1, height: 24, background: "#E4E4E4", flexShrink: 0 }} />
 
-            {/* Year (hidden when GDrive active — GDrive is always 2026) */}
-            {sourceToggle === "databricks" && <>
+            {/* Year picker — 2022-2026 for Databricks, 2025-2026 for GDrive */}
+            <>
             <span style={{ font: "600 12px/16px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>Year</span>
             <div style={{ display: "flex", border: "1px solid #E4E4E4", borderRadius: 8, overflow: "hidden" }}>
-              {AVAILABLE_YEARS.map(y => (
+              {(sourceToggle === "gdrive" ? AVAILABLE_YEARS_GDRIVE : AVAILABLE_YEARS_DB).map((y, i, arr) => (
                 <button key={y} onClick={() => setYear(y)} style={{
                   padding: "7px 13px", border: "none", cursor: "pointer",
                   font: "500 12px/16px var(--font-body)",
-                  background: year === y ? "#067A46" : "#fff",
+                  background: year === y ? (sourceToggle === "gdrive" ? "#1565C0" : "#067A46") : "#fff",
                   color: year === y ? "#fff" : "#676767",
                   transition: "all 120ms",
-                  borderRight: y !== 2026 ? "1px solid #E4E4E4" : "none",
+                  borderRight: i < arr.length - 1 ? "1px solid #E4E4E4" : "none",
                 }}>{y}</button>
               ))}
             </div>
-            </>}
+            </>
 
             <div style={{ width: 1, height: 24, background: "#E4E4E4", flexShrink: 0 }} />
 
