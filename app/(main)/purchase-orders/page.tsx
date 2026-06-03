@@ -227,7 +227,8 @@ export default function PurchaseOrdersPage() {
 
   const [allRows,        setAllRows]        = useState<PORow[]>(PO_ROWS);
   const [marketTotals,   setMarketTotals]   = useState<Record<string, number>>({});
-  const [dataSource,     setDataSource]     = useState<"loading"|"databricks"|"static">("loading");
+  const [dataSource,     setDataSource]     = useState<"loading"|"databricks"|"static"|"gdrive">("loading");
+  const [sourceToggle,   setSourceToggle]   = useState<"databricks"|"gdrive">("databricks");
   const [year,           setYear]           = useState<number>(2026);
   const [period,         setPeriod]         = useState<Period>("full");
   const [filterMarkets,     setFilterMarkets]     = useState<string[]>([]);
@@ -235,23 +236,27 @@ export default function PurchaseOrdersPage() {
   const [filterCategory,    setFilterCategory]    = useState<string>("");
   const [filterSubCategory, setFilterSubCategory] = useState<string[]>([]);
 
-  // Load data
-  const loadData = useCallback((p: Period, y: number) => {
+  // Load data — switches between Databricks and GDrive based on sourceToggle
+  const loadData = useCallback((p: Period, y: number, src: "databricks"|"gdrive") => {
     setDataSource("loading");
-    fetch(`/api/po-data?period=${p}&year=${y}`)
+    const url = src === "gdrive"
+      ? `/api/gdrive-ptn-data?period=${p}`
+      : `/api/po-data?period=${p}&year=${y}`;
+    fetch(url)
       .then(res => {
-        const src = res.headers.get("X-Data-Source");
-        return res.json().then((payload: { rows: PORow[]; marketTotals: Record<string, number> }) => ({ payload, src }));
+        const srcHeader = res.headers.get("X-Data-Source");
+        return res.json().then((payload: { rows: PORow[]; marketTotals: Record<string, number> }) => ({ payload, srcHeader }));
       })
-      .then(({ payload, src }) => {
+      .then(({ payload, srcHeader }) => {
         setAllRows(payload.rows ?? []);
         setMarketTotals(payload.marketTotals ?? {});
-        setDataSource(src === "databricks" ? "databricks" : "static");
+        if (srcHeader === "gdrive") setDataSource("gdrive");
+        else setDataSource(srcHeader === "databricks" ? "databricks" : "static");
       })
       .catch(() => { setAllRows(PO_ROWS); setMarketTotals({}); setDataSource("static"); });
   }, []);
 
-  useEffect(() => { loadData(period, year); }, [period, year, loadData]);
+  useEffect(() => { loadData(period, year, sourceToggle); }, [period, year, sourceToggle, loadData]);
 
   // Derive live category options — skip empty codes
   const liveCategories = useMemo(() => {
@@ -332,7 +337,8 @@ export default function PurchaseOrdersPage() {
               <span>PO spend · {getPeriodLabel(period, year)}</span>
               <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#BBB", display: "inline-block" }} />
               {dataSource === "loading"    && <span style={{ color: "#E8820C" }}>⟳ Loading…</span>}
-              {dataSource === "databricks" && <span style={{ color: "#067A46" }}>● Live data</span>}
+              {dataSource === "databricks" && <span style={{ color: "#067A46" }}>● Live · Databricks</span>}
+              {dataSource === "gdrive"     && <span style={{ color: "#1565C0" }}>● GDrive · PTN Q2 2026</span>}
               {dataSource === "static"     && <span style={{ color: "#AAAAAA" }}>● Dummy data</span>}
               <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#BBB", display: "inline-block" }} />
               <span style={{
@@ -350,9 +356,46 @@ export default function PurchaseOrdersPage() {
 
       <div style={{ padding: "24px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
 
+        {/* GDrive source banner */}
+        {sourceToggle === "gdrive" && (
+          <div style={{
+            background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8,
+            padding: "10px 16px", display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: 16 }}>📂</span>
+            <span style={{ font: "400 13px/18px var(--font-body)", color: "#1565C0" }}>
+              <strong>GDrive source active</strong> — showing OT_export_PTN data (Proteins only · 2026 · Lucanet FX).
+              Markets: GB · FR · DACH · DKSE · BENELUX · AUNZ · IE · EU. Excludes: US · CA · ES · IT.
+              Internal HF transfers excluded. Switch to <strong>Databricks</strong> for all categories.
+            </span>
+          </div>
+        )}
+
         {/* ── Period + Filters ────────────────────────────────────────────────── */}
         <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #E4E4E4", padding: "14px 20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+
+            {/* Source toggle */}
+            <span style={{ font: "600 12px/16px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>Source</span>
+            <div style={{ display: "flex", border: "1px solid #E4E4E4", borderRadius: 8, overflow: "hidden" }}>
+              {(["databricks", "gdrive"] as const).map((s, i) => (
+                <button key={s} onClick={() => setSourceToggle(s)} style={{
+                  padding: "7px 13px", border: "none", cursor: "pointer",
+                  font: "500 12px/16px var(--font-body)",
+                  background: sourceToggle === s ? (s === "gdrive" ? "#1565C0" : "#067A46") : "#fff",
+                  color: sourceToggle === s ? "#fff" : "#676767",
+                  transition: "all 120ms",
+                  borderRight: i === 0 ? "1px solid #E4E4E4" : "none",
+                }}>
+                  {s === "databricks" ? "Databricks" : "GDrive · PTN"}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ width: 1, height: 24, background: "#E4E4E4", flexShrink: 0 }} />
+
+            {/* Year (hidden when GDrive active — GDrive is always 2026) */}
+            {sourceToggle === "databricks" && <>
             <span style={{ font: "600 12px/16px var(--font-body)", color: "#676767", textTransform: "uppercase", letterSpacing: ".04em", whiteSpace: "nowrap" }}>Year</span>
             <div style={{ display: "flex", border: "1px solid #E4E4E4", borderRadius: 8, overflow: "hidden" }}>
               {AVAILABLE_YEARS.map(y => (
@@ -366,6 +409,7 @@ export default function PurchaseOrdersPage() {
                 }}>{y}</button>
               ))}
             </div>
+            </>}
 
             <div style={{ width: 1, height: 24, background: "#E4E4E4", flexShrink: 0 }} />
 
