@@ -57,11 +57,32 @@ async function fetchChunk(
 }
 
 /**
+ * Poll a running Databricks statement until it completes or fails.
+ * Used when the initial 50s synchronous wait isn't enough for heavy queries.
+ */
+async function pollStatement(statementId: string): Promise<StatementResponse> {
+  const url = `https://${HOST}/api/2.0/sql/statements/${statementId}`;
+  const POLL_INTERVAL_MS = 3000;
+  const MAX_WAIT_MS      = 5 * 60 * 1000; // 5 minutes max
+  const deadline = Date.now() + MAX_WAIT_MS;
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    if (!res.ok) throw new Error(`Databricks poll HTTP ${res.status}`);
+    const data: StatementResponse = await res.json();
+    if (data.status.state === 'SUCCEEDED' || data.status.state === 'FAILED') {
+      return data;
+    }
+    console.info(`[databricks] Polling ${statementId}: ${data.status.state}`);
+  }
+  throw new Error('Databricks query exceeded 5-minute poll timeout');
+}
+
+/**
  * Run a SQL query on Databricks and return rows as plain objects.
- * Uses the synchronous execution path (wait_timeout=30s).
- * Automatically pages through all result chunks — the initial response
- * only contains the first chunk; subsequent chunks are fetched via the
- * chunk API to ensure no rows are silently dropped.
+ * Waits up to 50s synchronously, then polls for up to 5 minutes if needed.
+ * Automatically pages through all result chunks.
  */
 export async function queryDatabricks<T = Record<string, unknown>>(
   sql: string
@@ -77,26 +98,31 @@ export async function queryDatabricks<T = Record<string, unknown>>(
     body: JSON.stringify({
       statement: sql,
       warehouse_id: WAREHOUSE_ID,
-      wait_timeout: '50s',   // increased from 30s to handle larger result sets
-      on_wait_timeout: 'CANCEL',
-      format: 'JSON_ARRAY',
-      disposition: 'INLINE',
+      wait_timeout:    '50s',
+      on_wait_timeout: 'CONTINUE',  // don't cancel — poll instead
+      format:          'JSON_ARRAY',
+      disposition:     'INLINE',
     }),
-    next: { revalidate: 300 }, // Next.js ISR: re-fetch every 5 minutes
+    next: { revalidate: 300 },
   });
 
   if (!res.ok) {
     throw new Error(`Databricks HTTP ${res.status}: ${await res.text()}`);
   }
 
-  const data: StatementResponse = await res.json();
+  let data: StatementResponse = await res.json();
 
   if (data.status.state === 'FAILED') {
     throw new Error(`Databricks query failed: ${data.status.error?.message}`);
   }
 
+  // If not done yet, poll until complete
   if (data.status.state !== 'SUCCEEDED') {
-    throw new Error(`Databricks query state: ${data.status.state} — increase wait_timeout`);
+    console.info(`[databricks] Query still running after 50s, polling (id=${data.statement_id})`);
+    data = await pollStatement(data.statement_id);
+    if (data.status.state === 'FAILED') {
+      throw new Error(`Databricks query failed: ${data.status.error?.message}`);
+    }
   }
 
   // Extract column names from manifest or result schema

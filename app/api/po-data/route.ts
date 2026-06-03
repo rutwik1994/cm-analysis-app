@@ -247,7 +247,8 @@ export async function GET(req: NextRequest) {
       staticMarketTotals[r.market] = (staticMarketTotals[r.market] ?? 0) + r.netValue;
     }
     return NextResponse.json({ rows: PO_ROWS, marketTotals: staticMarketTotals }, {
-      headers: { 'X-Data-Source': 'static-fallback', 'X-Error': String(err) },
+      // Strip non-ASCII chars (e.g. em-dash) from error string — HTTP headers are ASCII-only
+      headers: { 'X-Data-Source': 'static-fallback', 'X-Error': String(err).replace(/[^\x00-\x7F]/g, '-') },
     });
   }
 }
