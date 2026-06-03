@@ -32,7 +32,7 @@ function inPeriod(week: string, period: string): boolean {
 }
 
 type GDRow = {
-  yr: string; mkt: string; wk: string; sup: string;
+  mkt: string; wk: string; sup: string;
   sub: string; cat: string;
   eur: number; qty: number; l: number;
 };
@@ -57,17 +57,15 @@ function weekToDate(week: string, offsetDays = 0): string {
 }
 
 export async function GET(req: NextRequest) {
-  const sp        = new URL(req.url).searchParams;
-  const period    = sp.get('period') ?? 'full';
-  const markets   = sp.get('market')?.split(',').filter(Boolean) ?? [];
+  const sp       = new URL(req.url).searchParams;
+  const period   = sp.get('period') ?? 'full';
+  const markets  = sp.get('market')?.split(',').filter(Boolean) ?? [];
   const catFilter = sp.get('category') ?? '';
-  const yearParam = sp.get('year') ?? '2026';
 
   try {
     const raw = load();
 
     const filtered = raw.filter(r => {
-      if (r.yr !== yearParam) return false;
       if (!inPeriod(r.wk, period)) return false;
       if (markets.length && !markets.includes(r.mkt)) return false;
       if (catFilter && r.cat !== catFilter) return false;
