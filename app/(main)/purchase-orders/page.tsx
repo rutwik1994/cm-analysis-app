@@ -215,35 +215,53 @@ function StatusBadge({ status }: { status: POStatus }) {
 export default function PurchaseOrdersPage() {
   const router = useRouter();
 
-  const [allRows,        setAllRows]        = useState<PORow[]>(PO_ROWS);
-  const [marketTotals,   setMarketTotals]   = useState<Record<string, number>>({});
-  const [dataSource,     setDataSource]     = useState<"loading"|"databricks"|"static"|"gdrive">("loading");
-  const [sourceToggle,   setSourceToggle]   = useState<"databricks"|"gdrive">("databricks");
-  const [year,           setYear]           = useState<number>(2026);
-  const [period,         setPeriod]         = useState<Period>("full");
+  type ServerAgg = {
+    marketTotals:   Record<string, number>;
+    supplierTotals: { supplier: string; spendEur: number }[];
+    monthlyTotals:  { month: string; spendEur: number; poCount: number }[];
+    kpis:           Record<string, number>;
+  };
+
+  const [allRows,      setAllRows]      = useState<PORow[]>(PO_ROWS);
+  const [serverAgg,    setServerAgg]    = useState<ServerAgg>({ marketTotals:{}, supplierTotals:[], monthlyTotals:[], kpis:{} });
+  const [dataSource,   setDataSource]   = useState<"loading"|"databricks"|"static"|"gdrive">("loading");
+  const [sourceToggle, setSourceToggle] = useState<"databricks"|"gdrive">("databricks");
+  const [year,         setYear]         = useState<number>(2026);
+  const [period,       setPeriod]       = useState<Period>("full");
   const [filterMarkets,     setFilterMarkets]     = useState<string[]>([]);
   const [filterStatus,      setFilterStatus]      = useState<string>("");
   const [filterCategory,    setFilterCategory]    = useState<string>("");
   const [filterSubCategory, setFilterSubCategory] = useState<string[]>([]);
 
-  // Load data — switches between Databricks and GDrive based on sourceToggle
   const loadData = useCallback((p: Period, y: number, src: "databricks"|"gdrive") => {
     setDataSource("loading");
     const url = src === "gdrive"
-      ? `/api/gdrive-ptn-data?period=${p}`
+      ? `/api/gdrive-ptn-data?period=${p}&year=${y}`
       : `/api/po-data?period=${p}&year=${y}`;
     fetch(url)
       .then(res => {
         const srcHeader = res.headers.get("X-Data-Source");
-        return res.json().then((payload: { rows: PORow[]; marketTotals: Record<string, number> }) => ({ payload, srcHeader }));
+        return res.json().then((payload: {
+          rows: PORow[];
+          marketTotals?: Record<string, number>;
+          supplierTotals?: { supplier: string; spendEur: number }[];
+          monthlyTotals?:  { month: string; spendEur: number; poCount: number }[];
+          kpis?:           Record<string, number>;
+        }) => ({ payload, srcHeader }));
       })
       .then(({ payload, srcHeader }) => {
         setAllRows(payload.rows ?? []);
-        setMarketTotals(payload.marketTotals ?? {});
-        if (srcHeader === "gdrive") setDataSource("gdrive");
-        else setDataSource(srcHeader === "databricks" ? "databricks" : "static");
+        setServerAgg({
+          marketTotals:   payload.marketTotals  ?? {},
+          supplierTotals: payload.supplierTotals ?? [],
+          monthlyTotals:  payload.monthlyTotals  ?? [],
+          kpis:           payload.kpis           ?? {},
+        });
+        if (srcHeader === "gdrive")       setDataSource("gdrive");
+        else if (srcHeader === "databricks") setDataSource("databricks");
+        else                              setDataSource("static");
       })
-      .catch(() => { setAllRows(PO_ROWS); setMarketTotals({}); setDataSource("static"); });
+      .catch(() => { setAllRows(PO_ROWS); setServerAgg({ marketTotals:{}, supplierTotals:[], monthlyTotals:[], kpis:{} }); setDataSource("static"); });
   }, []);
 
   useEffect(() => { loadData(period, year, sourceToggle); }, [period, year, sourceToggle, loadData]);
@@ -263,49 +281,58 @@ export default function PurchaseOrdersPage() {
     return Object.keys(SUBCAT_TO_MANAGER).sort();
   }, [filterCategory]);
 
-  // Client-side filters
+  // Table rows — client-side filter on the 200 server-returned rows
   const filteredRows = useMemo(() => {
     let rows = allRows;
-    if (filterMarkets.length)     rows = rows.filter(r => filterMarkets.includes(r.market));
-    if (filterStatus)             rows = rows.filter(r => r.status === filterStatus);
-    if (filterCategory)           rows = rows.filter(r => r.category === filterCategory);
-    // Sub-category filter: works when PORow has subCategory (future enrichment via culinary_sku JOIN)
-    if (filterSubCategory.length) rows = rows.filter(r => filterSubCategory.includes((r as PORow & { subCategory?: string }).subCategory ?? ''));
+    if (filterMarkets.length) rows = rows.filter(r => filterMarkets.includes(r.market));
+    if (filterStatus)         rows = rows.filter(r => r.status === filterStatus);
+    if (filterCategory)       rows = rows.filter(r => r.category === filterCategory);
     return rows;
-  }, [allRows, filterMarkets, filterStatus, filterCategory, filterSubCategory]);
+  }, [allRows, filterMarkets, filterStatus, filterCategory]);
 
-  // Derived metrics
-  const totalValue   = useMemo(() => filteredRows.reduce((s, r) => s + r.netValue, 0), [filteredRows]);
-  const totalPOs     = useMemo(() => new Set(filteredRows.map(r => r.poNumber)).size, [filteredRows]);
-  const initiatedVal = useMemo(() => filteredRows.filter(r => r.status === "INITIATED").reduce((s, r) => s + r.netValue, 0), [filteredRows]);
-  const initiatedCnt = useMemo(() => new Set(filteredRows.filter(r => r.status === "INITIATED").map(r => r.poNumber)).size, [filteredRows]);
-  const sentVal      = useMemo(() => filteredRows.filter(r => r.status === "SENT").reduce((s, r) => s + r.netValue, 0), [filteredRows]);
+  // KPIs — from server aggregation (accurate over full dataset)
+  const { kpis, marketTotals, supplierTotals: srvSuppliers, monthlyTotals: srvMonthly } = serverAgg;
+  const totalValue   = kpis['total_spend']      ?? filteredRows.reduce((s, r) => s + r.netValue, 0);
+  const totalPOs     = kpis['total_pos']        ?? new Set(filteredRows.map(r => r.poNumber)).size;
+  const initiatedVal = kpis['INITIATED_spend']  ?? 0;
+  const initiatedCnt = kpis['INITIATED_count']  ?? 0;
+  const sentVal      = kpis['SENT_spend']       ?? 0;
   const avgValue     = totalPOs > 0 ? totalValue / totalPOs : 0;
 
-  // Chart data
-  const monthlyTrend   = useMemo(() => buildMonthlyTrend(filteredRows),  [filteredRows]);
-  const supplierData   = useMemo(() => buildSupplierData(filteredRows),   [filteredRows]);
-  const statusData     = useMemo(() => buildStatusData(filteredRows),     [filteredRows]);
+  // Charts — server aggregations (no client-side recompute needed)
+  const monthlyTrend = useMemo(() => {
+    if (srvMonthly.length > 0) {
+      const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      return srvMonthly.map(m => ({
+        month: MONTH_NAMES[parseInt(m.month.slice(5)) - 1] ?? m.month,
+        value: m.spendEur,
+        count: m.poCount,
+      }));
+    }
+    return buildMonthlyTrend(filteredRows);
+  }, [srvMonthly, filteredRows]);
 
-  // Use server-aggregated totals for the market chart when available (avoids LIMIT-3000 bias).
-  // When a market filter is active, fall back to client-side so filtered rows are respected.
+  const supplierData = useMemo(() => {
+    if (srvSuppliers.length > 0) {
+      return srvSuppliers.slice(0, 8).map(s => ({ supplier: s.supplier, value: s.spendEur }));
+    }
+    return buildSupplierData(filteredRows);
+  }, [srvSuppliers, filteredRows]);
+
+  const statusData = useMemo(() => buildStatusData(filteredRows), [filteredRows]);
+
   const marketData = useMemo(() => {
-    if (Object.keys(marketTotals).length > 0 && filterMarkets.length === 0) {
-      return MARKETS
-        .filter(m => marketTotals[m] != null)
+    if (Object.keys(marketTotals).length > 0) {
+      return MARKETS.filter(m => marketTotals[m] != null)
         .map(m => ({ market: m, value: marketTotals[m] }))
         .sort((a, b) => b.value - a.value);
     }
     return buildMarketData(filteredRows);
-  }, [marketTotals, filterMarkets, filteredRows]);
+  }, [marketTotals, filteredRows]);
 
-  // Total derived from marketData so the bar percentages use the same base as the values.
   const marketChartTotal = useMemo(
-    () => marketData.reduce((s, d) => s + d.value, 0),
-    [marketData],
-  );
+    () => marketData.reduce((s, d) => s + d.value, 0), [marketData]);
 
-  // Sorted table
   const tableRows = useMemo(() =>
     [...filteredRows].sort((a, b) => b.netValue - a.netValue).slice(0, 50)
   , [filteredRows]);

@@ -147,77 +147,104 @@ export async function GET(req: NextRequest) {
       where.push(`week <= '${weekRange[1]}'`);
     }
 
-    // ── Market-level aggregation (for the spend-by-market chart) ────────────────
-    // Computed server-side so it's never cut off by the transaction LIMIT below.
-    // Only includes the same food SKU categories as category-overview for consistency.
-    const FOOD_CATS = `sku_category IN ('PTN','DAI','BAK','PHF','DRY','SPI','CON','PRO')`;
-    const marketAggrSql = `
-      SELECT
-        CASE country_group
-          WHEN 'BENELUXFR' THEN 'BENELUX'
-          WHEN 'BENELUX'   THEN 'BENELUX'
-          WHEN 'FR'        THEN 'FR'
-          WHEN 'FRANCE'    THEN 'FR'
-          WHEN 'GB'        THEN 'GB'
-          WHEN 'UK'        THEN 'GB'
-          WHEN 'AU'        THEN 'AUNZ'
-          WHEN 'NZ'        THEN 'AUNZ'
+    const MKT_CASE = `CASE country_group
+          WHEN 'BENELUXFR' THEN 'BENELUX' WHEN 'BENELUX' THEN 'BENELUX'
+          WHEN 'FR'        THEN 'FR'       WHEN 'FRANCE'  THEN 'FR'
+          WHEN 'GB'        THEN 'GB'       WHEN 'UK'      THEN 'GB'
+          WHEN 'AU'        THEN 'AUNZ'     WHEN 'NZ'      THEN 'AUNZ'
           WHEN 'AUNZ'      THEN 'AUNZ'
-          ELSE country_group
-        END                                                              AS market,
-        ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0)             AS spendEur
-      FROM ${TABLE}
-      WHERE ${[...where, FOOD_CATS].join(' AND ')}
-      GROUP BY country_group
-    `;
+          ELSE country_group END`;
 
-    // ── Transaction rows (for the PO table) — all rows, no LIMIT ───────────────
-    // Grouped by order_number × supplier × country_group × sku_category so the
-    // result set is PO-level, not raw line-item level. All rows are returned so
-    // client-side aggregations (supplier chart, monthly trend, category split)
-    // are accurate rather than biased toward top-value POs.
-    const sql = `
-      SELECT
-        order_number                                          AS poNumber,
-        DATE_FORMAT(MIN(created_at), 'yyyy-MM-dd')           AS poDate,
-        DATE_FORMAT(MIN(expected_arrival_date), 'yyyy-MM-dd') AS deliveryDate,
-        supplier_name                                         AS supplier,
-        CASE country_group
-          WHEN 'BENELUXFR' THEN 'BENELUX'
-          WHEN 'BENELUX'   THEN 'BENELUX'
-          WHEN 'FR'        THEN 'FR'
-          WHEN 'FRANCE'    THEN 'FR'
-          WHEN 'GB'        THEN 'GB'
-          WHEN 'UK'        THEN 'GB'
-          WHEN 'AU'        THEN 'AUNZ'
-          WHEN 'NZ'        THEN 'AUNZ'
-          WHEN 'AUNZ'      THEN 'AUNZ'
-          ELSE country_group
-        END                                                   AS market,
-        sku_category                                          AS category,
-        -- Convert each line item before summing — avoids MAX(currency) picking the
-        -- wrong rate when a single order has lines in multiple currencies.
-        ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 2)  AS netValue,
-        MAX(currency)                                         AS currency,
-        MAX(status)                                           AS status,
-        COUNT(*)                                              AS lineItems,
-        MAX(week)                                             AS week
-      FROM ${TABLE}
-      WHERE ${where.join(' AND ')}
+    const W = where.join(' AND ');
+
+    // ── 1. Market totals (for bar chart) ─────────────────────────────────────
+    const marketAggrSql = `
+      SELECT ${MKT_CASE} AS market,
+             ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0) AS spendEur
+      FROM ${TABLE} WHERE ${W}
+      GROUP BY country_group`;
+
+    // ── 2. Top 10 supplier totals (for supplier chart) ────────────────────────
+    const supplierAggrSql = `
+      SELECT supplier_name AS supplier,
+             ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0) AS spendEur
+      FROM ${TABLE} WHERE ${W}
+      GROUP BY supplier_name
+      ORDER BY SUM(item_total_price) DESC
+      LIMIT 10`;
+
+    // ── 3. Monthly trend (for line chart) ─────────────────────────────────────
+    const monthlyAggrSql = `
+      SELECT DATE_FORMAT(MIN(created_at), 'yyyy-MM') AS month,
+             ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0) AS spendEur,
+             COUNT(DISTINCT order_number) AS poCount
+      FROM ${TABLE} WHERE ${W}
+      GROUP BY DATE_FORMAT(created_at, 'yyyy-MM')
+      ORDER BY month`;
+
+    // ── 4. KPI totals (spend, PO count, by status) ────────────────────────────
+    const kpiSql = `
+      SELECT status,
+             ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 0) AS spendEur,
+             COUNT(DISTINCT order_number) AS poCount
+      FROM ${TABLE} WHERE ${W}
+      GROUP BY status`;
+
+    // ── 5. Table rows — top 200 by value only (table shows top 50) ───────────
+    const tableSql = `
+      SELECT order_number AS poNumber,
+             DATE_FORMAT(MIN(created_at), 'yyyy-MM-dd') AS poDate,
+             DATE_FORMAT(MIN(expected_arrival_date), 'yyyy-MM-dd') AS deliveryDate,
+             supplier_name AS supplier,
+             ${MKT_CASE} AS market,
+             sku_category AS category,
+             ROUND(SUM(item_total_price * ${FX_CASE_INLINE}), 2) AS netValue,
+             MAX(currency) AS currency,
+             MAX(status) AS status,
+             COUNT(*) AS lineItems,
+             MAX(week) AS week
+      FROM ${TABLE} WHERE ${W}
       GROUP BY order_number, supplier_name, country_group, sku_category
       ORDER BY SUM(item_total_price) DESC
-    `;
+      LIMIT 200`;
 
-    const [rawMarkets, rawRows] = await Promise.all([
+    const [rawMarkets, rawSuppliers, rawMonthly, rawKpis, rawRows] = await Promise.all([
       queryDatabricks<Record<string, string>>(marketAggrSql),
-      queryDatabricks<Record<string, string>>(sql),
+      queryDatabricks<Record<string, string>>(supplierAggrSql),
+      queryDatabricks<Record<string, string>>(monthlyAggrSql),
+      queryDatabricks<Record<string, string>>(kpiSql),
+      queryDatabricks<Record<string, string>>(tableSql),
     ]);
 
-    // Parse market totals into a lookup
+    // Parse aggregations
     const marketTotals: Record<string, number> = {};
     for (const m of rawMarkets) {
       if (m.market) marketTotals[m.market] = parseFloat(m.spendEur) || 0;
     }
+
+    const supplierTotals = rawSuppliers.map(r => ({
+      supplier: r.supplier ?? '',
+      spendEur: parseFloat(r.spendEur) || 0,
+    }));
+
+    const monthlyTotals = rawMonthly.map(r => ({
+      month:   r.month ?? '',
+      spendEur: parseFloat(r.spendEur) || 0,
+      poCount: parseInt(r.poCount) || 0,
+    }));
+
+    const kpis: Record<string, number> = {};
+    let totalSpend = 0, totalPOs = 0;
+    for (const r of rawKpis) {
+      const s = parseFloat(r.spendEur) || 0;
+      const c = parseInt(r.poCount) || 0;
+      kpis[`${r.status}_spend`] = s;
+      kpis[`${r.status}_count`] = c;
+      totalSpend += s;
+      totalPOs   += c;
+    }
+    kpis['total_spend'] = totalSpend;
+    kpis['total_pos']   = totalPOs;
 
     const rows = rawRows.map(r => ({
       poNumber:     r.poNumber     ?? '',
@@ -226,18 +253,17 @@ export async function GET(req: NextRequest) {
       supplier:     r.supplier     ?? '',
       market:       r.market       ?? '',
       category:     r.category     ?? '',
-      netValue:     parseFloat(r.netValue) || 0,   // already EUR — converted per-line in SQL
-      currency:     r.currency     ?? 'EUR',   // original currency kept for reference
+      netValue:     parseFloat(r.netValue) || 0,
+      currency:     r.currency     ?? 'EUR',
       status:       (r.status as import('@/lib/po-data').POStatus) ?? 'INITIATED',
       lineItems:    parseInt(r.lineItems)   || 0,
       week:         r.week         ?? '',
     }));
 
-    return NextResponse.json({ rows, marketTotals }, {
+    return NextResponse.json({ rows, marketTotals, supplierTotals, monthlyTotals, kpis }, {
       headers: {
-        'X-Data-Source':  'databricks',
-        'X-Row-Count':    String(rows.length),
-        'X-Result-Count': String(rows.length),
+        'X-Data-Source': 'databricks',
+        'X-Row-Count':   String(rows.length),
       },
     });
   } catch (err) {
