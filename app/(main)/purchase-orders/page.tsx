@@ -338,7 +338,7 @@ export default function PurchaseOrdersPage() {
               <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#BBB", display: "inline-block" }} />
               {dataSource === "loading"    && <span style={{ color: "#E8820C" }}>⟳ Loading…</span>}
               {dataSource === "databricks" && <span style={{ color: "#067A46" }}>● Live · Databricks</span>}
-              {dataSource === "gdrive"     && <span style={{ color: "#1565C0" }}>● GDrive · PTN Q2 2026</span>}
+              {dataSource === "gdrive"     && <span style={{ color: "#1565C0" }}>● GDrive · 8 categories · 2026</span>}
               {dataSource === "static"     && <span style={{ color: "#AAAAAA" }}>● Dummy data</span>}
               <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#BBB", display: "inline-block" }} />
               <span style={{
@@ -364,9 +364,8 @@ export default function PurchaseOrdersPage() {
           }}>
             <span style={{ fontSize: 16 }}>📂</span>
             <span style={{ font: "400 13px/18px var(--font-body)", color: "#1565C0" }}>
-              <strong>GDrive source active</strong> — showing OT_export_PTN data (Proteins only · 2026 · Lucanet FX).
-              Markets: GB · FR · DACH · DKSE · BENELUX · AUNZ · IE · EU. Excludes: US · CA · ES · IT.
-              Internal HF transfers excluded. Switch to <strong>Databricks</strong> for all categories.
+              <strong>GDrive source active</strong> — showing OT_export data for all 8 categories (BAK · CON · DAI · DRY · PHF · PRO · PTN · SPI · 2026 · Lucanet FX).
+              Markets: GB · FR · DACH · DKSE · BENELUX · AUNZ · IE · EU. Excludes: US · CA · ES · IT. Internal HF transfers included (filter by supplier to exclude).
             </span>
           </div>
         )}
@@ -387,7 +386,7 @@ export default function PurchaseOrdersPage() {
                   transition: "all 120ms",
                   borderRight: i === 0 ? "1px solid #E4E4E4" : "none",
                 }}>
-                  {s === "databricks" ? "Databricks" : "GDrive · PTN"}
+                  {s === "databricks" ? "Databricks" : "GDrive · All Categories"}
                 </button>
               ))}
             </div>
