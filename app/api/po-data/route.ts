@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queryDatabricks } from '@/lib/databricks';
 import { PO_ROWS } from '@/lib/po-data';
+import { getPeriodWeeks } from '@/lib/period-weeks';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,19 +82,6 @@ const MARKET_TO_DB: Record<string, string[]> = {
   IT:      ['IT'],                      // Italy (small, emerging)
 };
 
-// HF week ranges — built dynamically per year so the API works for any year
-function getPeriodWeeks(year: number): Record<string, [string, string] | null> {
-  const y = String(year);
-  return {
-    full: null,
-    h1:   [`${y}-W01`, `${y}-W26`],
-    h2:   [`${y}-W27`, `${y}-W52`],
-    q1:   [`${y}-W01`, `${y}-W13`],
-    q2:   [`${y}-W14`, `${y}-W26`],
-    q3:   [`${y}-W27`, `${y}-W39`],
-    q4:   [`${y}-W40`, `${y}-W52`],
-  };
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

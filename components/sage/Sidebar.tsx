@@ -23,10 +23,16 @@ const GROUPS: NavGroup[] = [
   },
   {
     id: 'category', label: 'Category Management', items: [
-      { id: 'catdach',    label: 'DACH',    path: '/category/dach',    icon: '🇩🇪' },
-      { id: 'catus',      label: 'US',      path: '/category/us',      icon: '🇺🇸' },
-      { id: 'catdkse',    label: 'DKSE',    path: '/category/dkse',    icon: '🇩🇰' },
-      { id: 'catbenelux', label: 'BENELUX', path: '/category/benelux', icon: '🇧🇪' },
+      { id: 'catdach',    label: 'DACH',          path: '/category/dach',    icon: '🇩🇪' },
+      { id: 'catus',      label: 'US',            path: '/category/us',      icon: '🇺🇸' },
+      { id: 'catdkse',    label: 'DKSE',          path: '/category/dkse',    icon: '🇩🇰' },
+      { id: 'catbenelux', label: 'BENELUX',       path: '/category/benelux', icon: '🇧🇪' },
+      { id: 'catgb',      label: 'Great Britain', path: '/category/gb',      icon: '🇬🇧' },
+      { id: 'catfr',      label: 'France',        path: '/category/fr',      icon: '🇫🇷' },
+      { id: 'catau',      label: 'Australia',     path: '/category/au',      icon: '🇦🇺' },
+      { id: 'catnz',      label: 'New Zealand',   path: '/category/nz',      icon: '🇳🇿' },
+      { id: 'catie',      label: 'Ireland',       path: '/category/ie',      icon: '🇮🇪' },
+      { id: 'catca',      label: 'Canada',        path: '/category/ca',      icon: '🇨🇦' },
     ],
   },
 ];

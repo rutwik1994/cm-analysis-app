@@ -141,6 +141,109 @@ function VolLabel({ x, y, width, height, value, isTotal }: { x?: number; y?: num
   );
 }
 
+// ── Supplier Card ─────────────────────────────────────────────────────────────
+function SupplierCard({
+  rank, supplier, spendEur, units, skus,
+  onGenerateBrief, brief, loadingBrief,
+}: {
+  rank: number;
+  supplier: string;
+  spendEur: number;
+  units: number;
+  skus: number;
+  onGenerateBrief: () => void;
+  brief: string;
+  loadingBrief: boolean;
+}) {
+  const riskLabel = rank <= 2 ? "High Dependency" : rank <= 5 ? "Medium" : "Low";
+  const riskColor = rank <= 2 ? "#DC2626" : rank <= 5 ? "#D97706" : "#067A46";
+  const dotColor  = rank <= 2 ? "#FCA5A5" : rank <= 5 ? "#FCD34D" : "#86EFAC";
+
+  return (
+    <div style={{
+      background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12,
+      padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12,
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ width: 10, height: 10, borderRadius: "50%", background: dotColor, display: "inline-block", flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ font: "600 14px/20px var(--font-display)", color: "#111827" }}>
+              {supplier}
+            </div>
+            <div style={{ font: "400 11px/14px var(--font-body)", color: "#9CA3AF", marginTop: 2 }}>
+              Rank #{rank}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <span style={{
+            background: riskColor + "18", color: riskColor, border: `1px solid ${riskColor}40`,
+            borderRadius: 6, padding: "2px 8px", font: "600 10px/14px var(--font-body)",
+            textTransform: "uppercase", letterSpacing: ".04em",
+          }}>
+            {riskLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Spend metrics */}
+      <div style={{ display: "flex", gap: 16 }}>
+        <div>
+          <div style={{ font: "700 18px/24px var(--font-display)", color: "#1565C0" }}>
+            {spendEur >= 1_000_000 ? `€${(spendEur / 1_000_000).toFixed(1)}M` : `€${(spendEur / 1_000).toFixed(0)}k`}
+          </div>
+          <div style={{ font: "400 10px/14px var(--font-body)", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: ".04em" }}>Spend (EUR)</div>
+        </div>
+        <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />
+        <div>
+          <div style={{ font: "600 14px/20px var(--font-display)", color: "#374151" }}>
+            {units >= 1_000 ? `${(units / 1_000).toFixed(0)}k` : units.toLocaleString()}
+          </div>
+          <div style={{ font: "400 10px/14px var(--font-body)", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: ".04em" }}>Units</div>
+        </div>
+        <div style={{ width: 1, background: "#F3F4F6", alignSelf: "stretch" }} />
+        <div>
+          <div style={{ font: "600 14px/20px var(--font-display)", color: "#374151" }}>{skus}</div>
+          <div style={{ font: "400 10px/14px var(--font-body)", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: ".04em" }}>SKUs</div>
+        </div>
+      </div>
+
+      {/* Brief button */}
+      <button
+        onClick={onGenerateBrief}
+        disabled={loadingBrief}
+        style={{
+          alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6,
+          padding: "7px 14px", border: "1px solid #067A46", borderRadius: 8,
+          background: loadingBrief ? "#F0FDF4" : "#fff", color: "#067A46",
+          font: "500 12px/16px var(--font-body)", cursor: loadingBrief ? "not-allowed" : "pointer",
+          transition: "background 120ms",
+        }}
+      >
+        {loadingBrief
+          ? <><span style={{ display: "inline-block", animation: "spin 1s linear infinite" }}>⟳</span> Generating…</>
+          : <>🤝 Generate Negotiation Brief</>}
+      </button>
+
+      {/* Brief output */}
+      {brief && (
+        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 14px" }}>
+          <ReactMarkdown components={{
+            p:      ({ children }) => <p style={{ margin: "0 0 8px", font: "400 12px/18px var(--font-body)", color: "#14532D" }}>{children}</p>,
+            ul:     ({ children }) => <ul style={{ margin: "4px 0 8px", paddingLeft: 18 }}>{children}</ul>,
+            li:     ({ children }) => <li style={{ font: "400 12px/18px var(--font-body)", color: "#14532D", marginBottom: 3 }}>{children}</li>,
+            strong: ({ children }) => <strong style={{ fontWeight: 600, color: "#166534" }}>{children}</strong>,
+          }}>
+            {brief}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function CategoryOverviewPage() {
   const [selectedCat,    setSelectedCat]    = useState("PTN");
@@ -159,6 +262,8 @@ export default function CategoryOverviewPage() {
   const [showBrief,      setShowBrief]      = useState(false);
   const [brief,          setBrief]          = useState('');
   const [briefLoading,   setBriefLoading]   = useState(false);
+  const [suppBriefs,     setSuppBriefs]     = useState<Record<string, string>>({});
+  const [suppBriefLoad,  setSuppBriefLoad]  = useState<Record<string, boolean>>({});
 
   // Debounce ref — avoids firing a Databricks query on every fast market-toggle click
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -353,6 +458,24 @@ export default function CategoryOverviewPage() {
       setBrief(`⚠️ Network error — ${err instanceof Error ? err.message : 'please try again.'}`);
     } finally {
       setBriefLoading(false);
+    }
+  }
+
+  async function generateSupplierBrief(supplierName: string, spendEur: number) {
+    setSuppBriefLoad(p => ({ ...p, [supplierName]: true }));
+    setSuppBriefs(p => ({ ...p, [supplierName]: '' }));
+    const catLabel2 = selectedCat || 'All Categories';
+    const mktLabel  = filterMarkets.length ? filterMarkets.join(', ') : 'All Markets';
+    const question  = `Generate negotiation preparation talking points for our upcoming renewal discussion with ${supplierName}. They supply ${catLabel2} across ${mktLabel}. Current spend: €${Math.round(spendEur).toLocaleString()}. Include: (1) Our leverage points, (2) Their leverage points, (3) Recommended opening position, (4) Key risks to flag, (5) Walk-away criteria. Be specific and actionable.`;
+    const context   = `Supplier: ${supplierName}\nCategory: ${catLabel2}\nMarkets: ${mktLabel}\nCumulative Spend: €${Math.round(spendEur).toLocaleString()}\nPeriod: ${timeframe === 'ytd' ? 'Year to Date' : timeframe}`;
+    try {
+      const res  = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, context }) });
+      const data = await res.json();
+      setSuppBriefs(p => ({ ...p, [supplierName]: data.answer ?? data.error ?? 'No response.' }));
+    } catch (err) {
+      setSuppBriefs(p => ({ ...p, [supplierName]: `⚠️ Network error — ${err instanceof Error ? err.message : 'please try again.'}` }));
+    } finally {
+      setSuppBriefLoad(p => ({ ...p, [supplierName]: false }));
     }
   }
 
@@ -729,6 +852,50 @@ export default function CategoryOverviewPage() {
               Coming Soon
             </div>
           </KpiSection>
+        </div>
+
+        {/* ── Supplier Performance & Negotiation Prep ────────────────────── */}
+        <div style={{ background: "#fff", border: "1px solid #E4E4E4", borderRadius: 10, padding: "24px 24px 20px" }}>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ font: "600 16px/22px var(--font-display)", color: "#111827" }}>
+              Supplier Performance &amp; Negotiation Prep
+            </div>
+            <div style={{ font: "400 12px/18px var(--font-body)", color: "#6B7280", marginTop: 4 }}>
+              Generate AI-powered negotiation briefs for each supplier using live spend data.
+            </div>
+          </div>
+
+          {suppLoading ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+              {[1,2,3].map(i => (
+                <div key={i} style={{ border: "1px solid #E5E7EB", borderRadius: 12, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ height: 16, width: "60%", background: "#F3F4F6", borderRadius: 4 }} />
+                  <div style={{ height: 28, width: "40%", background: "#F3F4F6", borderRadius: 4 }} />
+                  <div style={{ height: 30, width: 160, background: "#F3F4F6", borderRadius: 8 }} />
+                </div>
+              ))}
+            </div>
+          ) : rankedSuppliers.length === 0 ? (
+            <div style={{ padding: "32px 0", textAlign: "center", color: "#9CA3AF", font: "400 13px/18px var(--font-body)" }}>
+              No supplier data for the selected filters.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+              {rankedSuppliers.map((s, i) => (
+                <SupplierCard
+                  key={s.supplier}
+                  rank={i + 1}
+                  supplier={s.supplier}
+                  spendEur={s.spendEur}
+                  units={s.units}
+                  skus={s.skus}
+                  onGenerateBrief={() => generateSupplierBrief(s.supplier, s.spendEur)}
+                  brief={suppBriefs[s.supplier] ?? ''}
+                  loadingBrief={suppBriefLoad[s.supplier] ?? false}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
